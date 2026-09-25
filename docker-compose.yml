@@ -1,0 +1,67 @@
+﻿services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: alera-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alera_db}
+      POSTGRES_USER: ${POSTGRES_USER:-alera_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alera_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - alera_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alera_user} -d ${POSTGRES_DB:-alera_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alera_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: alera-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-alera_redis_password}"]
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - alera_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-alera_redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alera_network
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: alera-minio
+    profiles: ["multimedia"]
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-alera_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-alera_minio_password}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - alera_minio_data:/data
+    networks:
+      - alera_network
+
+volumes:
+  alera_postgres_data:
+    name: alera_postgres_data
+  alera_redis_data:
+    name: alera_redis_data
+  alera_minio_data:
+    name: alera_minio_data
+
+networks:
+  alera_network:
+    name: alera_network
+    driver: bridge
