@@ -1,6 +1,7 @@
 package com.alera.devices.application;
 
 import com.alera.devices.domain.model.Device;
+import com.alera.devices.domain.model.NearbyDeviceLocation;
 import com.alera.devices.domain.model.Platform;
 import com.alera.devices.domain.port.in.RegisterDeviceUseCase;
 import com.alera.devices.domain.port.in.UpdateDeviceLocationUseCase;
@@ -23,6 +24,11 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
 
     private final DeviceRepositoryPort deviceRepository;
     private final DeviceLocationRepositoryPort locationRepository;
+
+    public record NearbyActiveDevice(
+            Device device,
+            double distanceKm
+    ) {}
 
     public DeviceService(DeviceRepositoryPort deviceRepository,
                          DeviceLocationRepositoryPort locationRepository) {
@@ -51,22 +57,16 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispositivo no encontrado con ID: " + deviceId));
 
-        // 1. Validar coordenadas geográficas usando el Value Object de dominio
         Coordinates coordinates = new Coordinates(latitude, longitude);
 
-        // 2. Actualizar presencia en base de datos relacional
         device.touch();
         Device updatedDevice = deviceRepository.save(device);
 
-        // 3. Guardar ubicación efímera geoespacial en Redis con TTL de 20 minutos
         locationRepository.saveLocation(deviceId, coordinates, DEFAULT_LOCATION_TTL_SECONDS);
 
         return updatedDevice;
     }
 
-    /**
-     * Consulta los dispositivos activos dentro de un radio de alerta sísmica.
-     */
     @Transactional(readOnly = true)
     public List<Device> findActiveDevicesNearby(Coordinates center, double radiusKm) {
         List<UUID> nearbyDeviceIds = locationRepository.findDeviceIdsNearby(center, radiusKm);
@@ -75,6 +75,18 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
                 .map(deviceRepository::findById)
                 .flatMap(Optional::stream)
                 .filter(Device::isActive)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<NearbyActiveDevice> findActiveDevicesNearbyWithDistance(Coordinates center, double radiusKm) {
+        List<NearbyDeviceLocation> nearby = locationRepository.findNearbyDevicesWithDistance(center, radiusKm);
+
+        return nearby.stream()
+                .map(loc -> deviceRepository.findById(loc.deviceId())
+                        .filter(Device::isActive)
+                        .map(dev -> new NearbyActiveDevice(dev, loc.distanceKm())))
+                .flatMap(Optional::stream)
                 .toList();
     }
 }
