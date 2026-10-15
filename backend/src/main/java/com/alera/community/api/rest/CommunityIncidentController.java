@@ -33,7 +33,7 @@ public class CommunityIncidentController {
         this.incidentService = Objects.requireNonNull(incidentService, "CommunityIncidentService no puede ser nulo");
     }
 
-    @PostMapping
+        @PostMapping
     public ResponseEntity<ApiResponse<CommunityIncidentResponseDto>> reportIncident(
             @Valid @RequestBody CreateIncidentRequestDto request) {
 
@@ -43,7 +43,8 @@ public class CommunityIncidentController {
                 request.toIncidentType(),
                 request.description(),
                 coordinates,
-                request.getEffectiveRadius()
+                request.getEffectiveRadius(),
+                request.images()
         );
 
         return ResponseEntity

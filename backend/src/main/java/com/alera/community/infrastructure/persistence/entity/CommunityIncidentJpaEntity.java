@@ -53,6 +53,9 @@ public class CommunityIncidentJpaEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "image_urls", columnDefinition = "text")
+    private String imageUrls;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -75,6 +78,7 @@ public class CommunityIncidentJpaEntity {
                                       int negativeVotes,
                                       Instant reportedAt,
                                       Instant expiresAt,
+                                      String imageUrls,
                                       Instant createdAt,
                                       Instant updatedAt) {
         this.id = id;
@@ -90,6 +94,7 @@ public class CommunityIncidentJpaEntity {
         this.negativeVotes = negativeVotes;
         this.reportedAt = reportedAt;
         this.expiresAt = expiresAt;
+        this.imageUrls = imageUrls;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -132,6 +137,9 @@ public class CommunityIncidentJpaEntity {
 
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+
+    public String getImageUrls() { return imageUrls; }
+    public void setImageUrls(String imageUrls) { this.imageUrls = imageUrls; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

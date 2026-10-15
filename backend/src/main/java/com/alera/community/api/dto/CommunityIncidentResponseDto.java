@@ -3,6 +3,7 @@ package com.alera.community.api.dto;
 import com.alera.community.domain.model.CommunityIncident;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record CommunityIncidentResponseDto(
@@ -18,6 +19,7 @@ public record CommunityIncidentResponseDto(
         int negativeVotes,
         Instant reportedAt,
         Instant expiresAt,
+        List<String> images,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -35,6 +37,7 @@ public record CommunityIncidentResponseDto(
                 incident.getNegativeVotes(),
                 incident.getReportedAt(),
                 incident.getExpiresAt(),
+                incident.getImageUrls(),
                 incident.getCreatedAt(),
                 incident.getUpdatedAt()
         );

@@ -4,7 +4,9 @@ import com.alera.community.domain.model.IncidentType;
 import com.alera.shared.domain.DomainException;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
+import java.util.List;
 import java.util.UUID;
 
 public record CreateIncidentRequestDto(
@@ -22,7 +24,11 @@ public record CreateIncidentRequestDto(
         @NotNull(message = "La longitud es obligatoria")
         Double longitude,
 
-        Integer radiusMeters
+        Integer radiusMeters,
+
+        @NotNull(message = "Debe adjuntar imagenes de evidencia")
+        @Size(min = 1, max = 4, message = "Debe adjuntar entre 1 y 4 imagenes")
+        List<String> images
 ) {
     public IncidentType toIncidentType() {
         try {

@@ -25,6 +25,7 @@ public interface CommunityIncidentSpringDataJpaRepository extends JpaRepository<
                i.negative_votes AS negativeVotes,
                i.reported_at AS reportedAt,
                i.expires_at AS expiresAt,
+               i.image_urls AS imageUrls,
                i.created_at AS createdAt,
                i.updated_at AS updatedAt,
                ST_Distance(i.location, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS distanceMeters

@@ -55,7 +55,19 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
     @Transactional
     public Device updateLocation(UUID deviceId, double latitude, double longitude) {
         Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Dispositivo no encontrado con ID: " + deviceId));
+                .orElseGet(() -> {
+                    Device autoRegistered = Device.reconstitute(
+                            deviceId,
+                            null,
+                            "DEV_TOKEN_" + deviceId.toString().substring(0, 8),
+                            Platform.IOS,
+                            true,
+                            java.time.Instant.now(),
+                            java.time.Instant.now(),
+                            java.time.Instant.now()
+                    );
+                    return deviceRepository.save(autoRegistered);
+                });
 
         Coordinates coordinates = new Coordinates(latitude, longitude);
 

@@ -5,6 +5,8 @@ import com.alera.shared.domain.DomainException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -25,6 +27,7 @@ public class CommunityIncident {
     private int negativeVotes;
     private final Instant reportedAt;
     private Instant expiresAt;
+    private final List<String> imageUrls;
     private final Instant createdAt;
     private Instant updatedAt;
 
@@ -39,9 +42,11 @@ public class CommunityIncident {
                               int negativeVotes,
                               Instant reportedAt,
                               Instant expiresAt,
+                              List<String> imageUrls,
                               Instant createdAt,
                               Instant updatedAt) {
         validateInvariants(radiusMeters);
+        validateImages(imageUrls);
         this.id = Objects.requireNonNull(id, "El ID del incidente no puede ser nulo");
         this.reporterDeviceId = Objects.requireNonNull(reporterDeviceId, "El reporterDeviceId no puede ser nulo");
         this.incidentType = Objects.requireNonNull(incidentType, "El tipo de incidente no puede ser nulo");
@@ -53,18 +58,17 @@ public class CommunityIncident {
         this.negativeVotes = Math.max(0, negativeVotes);
         this.reportedAt = Objects.requireNonNull(reportedAt, "reportedAt no puede ser nulo");
         this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt no puede ser nulo");
+        this.imageUrls = (imageUrls != null) ? List.copyOf(imageUrls) : Collections.emptyList();
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt no puede ser nulo");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt no puede ser nulo");
     }
 
-    /**
-     * Factoría para reportar un nuevo incidente ciudadano.
-     */
     public static CommunityIncident report(UUID reporterDeviceId,
                                           IncidentType type,
                                           String description,
                                           Coordinates coordinates,
-                                          int radiusMeters) {
+                                          int radiusMeters,
+                                          List<String> images) {
         Instant now = Instant.now();
         Instant expires = now.plus(DEFAULT_DURATION);
         int safeRadius = (radiusMeters <= 0) ? 1000 : radiusMeters;
@@ -81,14 +85,12 @@ public class CommunityIncident {
                 0,
                 now,
                 expires,
+                images,
                 now,
                 now
         );
     }
 
-    /**
-     * Factoría para reconstituir desde PostgreSQL.
-     */
     public static CommunityIncident reconstitute(UUID id,
                                                  UUID reporterDeviceId,
                                                  IncidentType incidentType,
@@ -100,15 +102,13 @@ public class CommunityIncident {
                                                  int negativeVotes,
                                                  Instant reportedAt,
                                                  Instant expiresAt,
+                                                 List<String> imageUrls,
                                                  Instant createdAt,
                                                  Instant updatedAt) {
         return new CommunityIncident(id, reporterDeviceId, incidentType, description, coordinates,
-                radiusMeters, status, positiveVotes, negativeVotes, reportedAt, expiresAt, createdAt, updatedAt);
+                radiusMeters, status, positiveVotes, negativeVotes, reportedAt, expiresAt, imageUrls, createdAt, updatedAt);
     }
 
-    /**
-     * Aplica un voto comunitario y recalcula el estado de forma determinista.
-     */
     public void registerVote(ConfirmationVoteType voteType) {
         if (Instant.now().isAfter(this.expiresAt)) {
             this.status = IncidentStatus.EXPIRED;
@@ -118,13 +118,11 @@ public class CommunityIncident {
 
         if (voteType == ConfirmationVoteType.STILL_ACTIVE) {
             this.positiveVotes++;
-            // Con 2 o más votos positivos, el incidente se considera confirmado por la comunidad
             if (this.positiveVotes >= 2 && this.status == IncidentStatus.ACTIVE) {
                 this.status = IncidentStatus.CONFIRMED_ACTIVE;
             }
         } else if (voteType == ConfirmationVoteType.RESOLVED) {
             this.negativeVotes++;
-            // Si hay 3 o más votos negativos y superan a los positivos, se marca resuelto
             if (this.negativeVotes >= 3 && this.negativeVotes > this.positiveVotes) {
                 this.status = IncidentStatus.RESOLVED;
             } else if (this.negativeVotes >= 2) {
@@ -143,6 +141,12 @@ public class CommunityIncident {
         }
     }
 
+    private static void validateImages(List<String> images) {
+        if (images == null || images.isEmpty() || images.size() > 4) {
+            throw new DomainException("Debe adjuntar entre 1 y 4 imagenes de evidencia.");
+        }
+    }
+
     public UUID getId() { return id; }
     public UUID getReporterDeviceId() { return reporterDeviceId; }
     public IncidentType getIncidentType() { return incidentType; }
@@ -154,6 +158,7 @@ public class CommunityIncident {
     public int getNegativeVotes() { return negativeVotes; }
     public Instant getReportedAt() { return reportedAt; }
     public Instant getExpiresAt() { return expiresAt; }
+    public List<String> getImageUrls() { return imageUrls; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

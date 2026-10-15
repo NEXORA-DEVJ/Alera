@@ -24,7 +24,7 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
 
     // Bounding Box para Colombia: Lat [-4.5, 13.5], Lon [-82.0, -66.5]
     private static final String USGS_COLOMBIA_URL =
-            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=2.0&limit=30&minlatitude=-4.5&maxlatitude=13.5&minlongitude=-82.0&maxlongitude=-66.5";
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time&minmagnitude=1.0&limit=100&minlatitude=-4.5&maxlatitude=13.5&minlongitude=-82.0&maxlongitude=-66.5";
 
     private final RestClient restClient;
 

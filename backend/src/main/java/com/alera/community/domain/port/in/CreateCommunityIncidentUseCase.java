@@ -4,6 +4,7 @@ import com.alera.community.domain.model.CommunityIncident;
 import com.alera.community.domain.model.IncidentType;
 import com.alera.shared.domain.Coordinates;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface CreateCommunityIncidentUseCase {
@@ -12,5 +13,6 @@ public interface CreateCommunityIncidentUseCase {
                                      IncidentType type,
                                      String description,
                                      Coordinates coordinates,
-                                     int radiusMeters);
+                                     int radiusMeters,
+                                     List<String> images);
 }

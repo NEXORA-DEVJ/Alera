@@ -1,9 +1,14 @@
-﻿server:
+server:
   port: 8085
 
 spring:
   application:
     name: alera-backend
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 15MB
 
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:alera_db}
@@ -40,3 +45,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+alera:
+  storage:
+    upload-dir: ${ALERA_UPLOAD_DIR:./uploads/incidents}

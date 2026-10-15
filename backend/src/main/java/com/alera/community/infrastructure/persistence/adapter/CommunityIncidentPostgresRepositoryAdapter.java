@@ -12,6 +12,8 @@ import com.alera.community.infrastructure.persistence.repository.NearbyIncidentP
 import com.alera.shared.domain.Coordinates;
 import org.springframework.stereotype.Repository;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,6 +24,7 @@ public class CommunityIncidentPostgresRepositoryAdapter implements CommunityInci
 
     private final CommunityIncidentSpringDataJpaRepository jpaRepository;
     private final CommunityIncidentMapper mapper;
+    private static final String IMAGE_DELIMITER = ";;;";
 
     public CommunityIncidentPostgresRepositoryAdapter(CommunityIncidentSpringDataJpaRepository jpaRepository,
                                                      CommunityIncidentMapper mapper) {
@@ -51,6 +54,10 @@ public class CommunityIncidentPostgresRepositoryAdapter implements CommunityInci
 
         return projections.stream()
                 .map(p -> {
+                    List<String> images = (p.getImageUrls() != null && !p.getImageUrls().isBlank())
+                            ? Arrays.asList(p.getImageUrls().split(IMAGE_DELIMITER))
+                            : Collections.emptyList();
+
                     CommunityIncident incident = CommunityIncident.reconstitute(
                             p.getId(),
                             p.getReporterDeviceId(),
@@ -63,6 +70,7 @@ public class CommunityIncidentPostgresRepositoryAdapter implements CommunityInci
                             p.getNegativeVotes(),
                             p.getReportedAt(),
                             p.getExpiresAt(),
+                            images,
                             p.getCreatedAt(),
                             p.getUpdatedAt()
                     );

@@ -16,6 +16,7 @@ public interface NearbyIncidentProjection {
     int getNegativeVotes();
     Instant getReportedAt();
     Instant getExpiresAt();
+    String getImageUrls();
     Instant getCreatedAt();
     Instant getUpdatedAt();
     double getDistanceMeters();

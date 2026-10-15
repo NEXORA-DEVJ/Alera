@@ -51,15 +51,14 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
                                             IncidentType type,
                                             String description,
                                             Coordinates coordinates,
-                                            int radiusMeters) {
-        CommunityIncident incident = CommunityIncident.report(reporterDeviceId, type, description, coordinates, radiusMeters);
+                                            int radiusMeters,
+                                            List<String> images) {
+        CommunityIncident incident = CommunityIncident.report(reporterDeviceId, type, description, coordinates, radiusMeters, images);
         CommunityIncident saved = incidentRepository.save(incident);
 
-        log.info("Nuevo incidente comunitario registrado: ID {}, Tipo {}, Radio {}m en ({}, {})",
-                saved.getId(), saved.getIncidentType(), saved.getRadiusMeters(),
-                coordinates.latitude(), coordinates.longitude());
+        log.info("Nuevo incidente comunitario registrado: ID {}, Tipo {}, Radio {}m con {} imagenes",
+                saved.getId(), saved.getIncidentType(), saved.getRadiusMeters(), images.size());
 
-        // Despachar alerta inmediata a los vecinos activos en el radio en Redis
         notifyNearbyDevices(saved);
 
         return saved;
@@ -105,12 +104,10 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
             List<DeviceService.NearbyActiveDevice> nearby =
                     deviceService.findActiveDevicesNearbyWithDistance(incident.getCoordinates(), radiusKm);
 
-            for (DeviceService.NearbyActiveDevice target : nearby) {
-                // No notificamos al mismo usuario que acaba de reportar el incidente
-                if (target.device().getId().equals(incident.getReporterDeviceId())) {
-                    continue;
-                }
+            log.info("Despachando alertas comunitarias para incidente {} (radio {} km). Dispositivos activos en zona: {}",
+                    incident.getId(), radiusKm, nearby.size());
 
+            for (DeviceService.NearbyActiveDevice target : nearby) {
                 String title = String.format("ALERTA COMUNITARIA: %s", incident.getIncidentType());
                 String body = (incident.getDescription() != null && !incident.getDescription().isBlank())
                         ? incident.getDescription() + String.format(" (a %.1f km)", target.distanceKm())

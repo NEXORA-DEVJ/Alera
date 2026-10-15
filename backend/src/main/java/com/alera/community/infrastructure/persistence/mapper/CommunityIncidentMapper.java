@@ -11,10 +11,22 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Component;
 
+import com.alera.media.domain.MediaStorageService;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 @Component
 public class CommunityIncidentMapper {
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+    private final MediaStorageService storageService;
+    private static final String IMAGE_DELIMITER = ";;;";
+
+    public CommunityIncidentMapper(MediaStorageService storageService) {
+        this.storageService = storageService;
+    }
 
     public CommunityIncidentJpaEntity toJpaEntity(CommunityIncident domain) {
         if (domain == null) return null;
@@ -22,6 +34,25 @@ public class CommunityIncidentMapper {
         Point location = geometryFactory.createPoint(
                 new Coordinate(domain.getCoordinates().longitude(), domain.getCoordinates().latitude())
         );
+
+        List<String> sanitizedImages = new ArrayList<>();
+        if (domain.getImageUrls() != null) {
+            for (String img : domain.getImageUrls()) {
+                if (img == null || img.isBlank()) continue;
+                if (img.startsWith("data:image/") || (img.length() > 255 && !img.startsWith("http"))) {
+                    try {
+                        String filename = storageService.storeBase64(img);
+                        sanitizedImages.add("/api/v1/media/" + filename);
+                    } catch (Exception e) {
+                        sanitizedImages.add(img);
+                    }
+                } else {
+                    sanitizedImages.add(img);
+                }
+            }
+        }
+
+        String imagesJoined = String.join(IMAGE_DELIMITER, sanitizedImages);
 
         return new CommunityIncidentJpaEntity(
                 domain.getId(),
@@ -37,6 +68,7 @@ public class CommunityIncidentMapper {
                 domain.getNegativeVotes(),
                 domain.getReportedAt(),
                 domain.getExpiresAt(),
+                imagesJoined,
                 domain.getCreatedAt(),
                 domain.getUpdatedAt()
         );
@@ -44,6 +76,10 @@ public class CommunityIncidentMapper {
 
     public CommunityIncident toDomain(CommunityIncidentJpaEntity entity) {
         if (entity == null) return null;
+
+        List<String> images = (entity.getImageUrls() != null && !entity.getImageUrls().isBlank())
+                ? Arrays.asList(entity.getImageUrls().split(IMAGE_DELIMITER))
+                : Collections.emptyList();
 
         return CommunityIncident.reconstitute(
                 entity.getId(),
@@ -57,6 +93,7 @@ public class CommunityIncidentMapper {
                 entity.getNegativeVotes(),
                 entity.getReportedAt(),
                 entity.getExpiresAt(),
+                images,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
