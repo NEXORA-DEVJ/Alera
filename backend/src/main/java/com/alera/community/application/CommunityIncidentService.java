@@ -108,16 +108,27 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
                     incident.getId(), radiusKm, nearby.size());
 
             for (DeviceService.NearbyActiveDevice target : nearby) {
-                String title = String.format("ALERTA COMUNITARIA: %s", incident.getIncidentType());
-                String body = (incident.getDescription() != null && !incident.getDescription().isBlank())
-                        ? incident.getDescription() + String.format(" (a %.1f km)", target.distanceKm())
-                        : String.format("Incidente reportado en tu zona a %.1f km.", target.distanceKm());
+                String typeName = switch (incident.getIncidentType()) {
+                    case LANDSLIDE -> "Derrumbe en vía";
+                    case FIRE -> "Incendio activo";
+                    case STRUCTURAL_DAMAGE -> "Falla estructural";
+                    case ROAD_BLOCK, ACCIDENT -> "Vía obstruida / accidente";
+                    default -> "Incidente comunitario";
+                };
+
+                String title = String.format("ALERTA COMUNITARIA: %s", typeName);
+                String body = String.format("Estás dentro del radio de afectación (%.1f km). %s",
+                        target.distanceKm(),
+                        (incident.getDescription() != null && !incident.getDescription().isBlank())
+                                ? incident.getDescription().trim()
+                                : "Reportado por la comunidad vecinal.");
 
                 Map<String, String> data = Map.of(
                         "incidentId", incident.getId().toString(),
                         "incidentType", incident.getIncidentType().name(),
+                        "type", "community",
                         "status", incident.getStatus().name(),
-                        "distanceKm", String.valueOf(target.distanceKm())
+                        "distanceKm", String.format(java.util.Locale.US, "%.1f", target.distanceKm())
                 );
 
                 notificationSender.send(new PushAlertMessage(

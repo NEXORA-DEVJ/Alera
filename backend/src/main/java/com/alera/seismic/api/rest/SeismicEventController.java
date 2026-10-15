@@ -37,7 +37,7 @@ public class SeismicEventController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<SeismicEventResponseDto>>> getRecentEvents(
-            @RequestParam(name = "limit", defaultValue = "20") int limit) {
+            @RequestParam(name = "limit", defaultValue = "100") int limit) {
 
         List<SeismicEventResponseDto> events = getRecentSeismicEventsUseCase.execute(limit)
                 .stream()

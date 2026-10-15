@@ -32,9 +32,11 @@ import {
 } from 'lucide-react-native';
 import { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { AleraCategoryIcon } from '../components/AleraBrand';
 import { api, generateUUID, resolveMediaUrl } from '../services/api';
 import { getRealDeviceLocation } from '../services/location';
-import { triggerLocalProximityAlert } from '../services/notifications';
+import { triggerLocalProximityAlert, markIncidentAsAlerted } from '../services/notifications';
 import { IncidentType } from '../types';
 
 interface Props {
@@ -268,7 +270,7 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
       setIsSubmitting(true);
       const validDeviceId = deviceId && deviceId.length === 36 ? deviceId : generateUUID();
 
-      await api.createCommunityIncident({
+      const createdIncident = await api.createCommunityIncident({
         reporterDeviceId: validDeviceId,
         incidentType: selectedType,
         description: description.trim(),
@@ -278,14 +280,27 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
         images: images,
       });
 
+      if (createdIncident && createdIncident.id) {
+        markIncidentAsAlerted(createdIncident.id);
+      }
+
       // Actualizar ubicación en Redis para el dispositivo
       api.updateLocation(validDeviceId, locationCoord.latitude, locationCoord.longitude).catch(() => {});
 
-      // Disparar alarma local y notificación push inmediata
+      // Formateo estetico de notificacion push con duracion oficial de 3 segundos
+      const typeLabel =
+        selectedType === 'LANDSLIDE' ? 'Derrumbe en vía' :
+        selectedType === 'FIRE' ? 'Incendio activo' :
+        selectedType === 'STRUCTURAL_DAMAGE' ? 'Falla estructural' : 'Vía obstruida';
+
+      const radiusKm = (radiusMeters / 1000).toFixed(1);
+
       triggerLocalProximityAlert(
-        `ALERTA COMUNITARIA: ${selectedType}`,
-        description.trim(),
-        true
+        `ALERTA COMUNITARIA: ${typeLabel}`,
+        `Estás dentro del radio de afectación (${radiusKm} km). ${description.trim()}`,
+        true,
+        'community',
+        `Radio de Afectación: ${radiusKm} km`
       );
 
       Alert.alert(
@@ -454,10 +469,10 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
                 onPress={() => setSelectedType('LANDSLIDE')}
                 activeOpacity={0.8}
               >
-                <AlertTriangle
-                  size={24}
+                <AleraCategoryIcon
+                  type="LANDSLIDE"
+                  size={26}
                   color={selectedType === 'LANDSLIDE' ? colors.seismicAccent : colors.amberAlertText}
-                  strokeWidth={2}
                 />
                 <Text style={styles.typeTitle}>Derrumbe</Text>
                 <Text style={styles.typeSubtitle}>Deslizamiento de tierra</Text>
@@ -471,10 +486,10 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
                 onPress={() => setSelectedType('FIRE')}
                 activeOpacity={0.8}
               >
-                <Flame
-                  size={24}
+                <AleraCategoryIcon
+                  type="FIRE"
+                  size={26}
                   color={selectedType === 'FIRE' ? colors.seismicAccent : colors.seismicRed}
-                  strokeWidth={2}
                 />
                 <Text style={styles.typeTitle}>Incendio</Text>
                 <Text style={styles.typeSubtitle}>Forestal o estructural</Text>
@@ -488,10 +503,10 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
                 onPress={() => setSelectedType('STRUCTURAL_DAMAGE')}
                 activeOpacity={0.8}
               >
-                <Building2
-                  size={24}
+                <AleraCategoryIcon
+                  type="STRUCTURAL_DAMAGE"
+                  size={26}
                   color={selectedType === 'STRUCTURAL_DAMAGE' ? colors.seismicAccent : colors.textSecondary}
-                  strokeWidth={2}
                 />
                 <Text style={styles.typeTitle}>Estructura</Text>
                 <Text style={styles.typeSubtitle}>Grieta o colapso</Text>
@@ -505,10 +520,10 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
                 onPress={() => setSelectedType('ROAD_BLOCK')}
                 activeOpacity={0.8}
               >
-                <Car
-                  size={24}
+                <AleraCategoryIcon
+                  type="ROAD_BLOCK"
+                  size={26}
                   color={selectedType === 'ROAD_BLOCK' ? colors.seismicAccent : colors.textPrimary}
-                  strokeWidth={2}
                 />
                 <Text style={styles.typeTitle}>Vía Obstruida</Text>
                 <Text style={styles.typeSubtitle}>Accidente o bloqueo</Text>

@@ -10,20 +10,27 @@ try {
 
 let activePlayer: any = null;
 let isSirenActive = false;
+let autoCutoffTimer: ReturnType<typeof setTimeout> | null = null;
+
+export type SirenAlertType = 'community' | 'seismic' | 'test';
 
 /**
- * Activa la sirena de emergencia sonora a volumen máximo y vibración extrema en bucle.
- * Configura playsInSilentMode para sonar incluso si el switch físico del iPhone está en silencio.
+ * Activa la sirena sismica oficial en bucle con vibracion haptica continua.
+ * Controla con precision la duracion segun el protocolo oficial de ALERA:
+ * - Alerta Comunitaria: maximo 3 segundos.
+ * - Alerta Sismica: maximo 5 segundos.
+ * - Modo Prueba: bucle continuo con boton de apagado manual y seguro a 10s.
  */
-export async function playEmergencySiren(): Promise<void> {
-  if (isSirenActive) return;
+export async function playEmergencySiren(type: SirenAlertType = 'community'): Promise<void> {
+  // Limpiar cualquier reproduccion o temporizador previo
+  await stopEmergencySiren();
   isSirenActive = true;
 
   try {
-    // 1. Vibración háptica de emergencia en bucle
+    // 1. Patron de vibracion haptica extrema de emergencia
     Vibration.vibrate([0, 800, 200, 800, 200, 1400], true);
 
-    // 2. Sirena acústica potente
+    // 2. Reproduccion acustica con expo-audio
     if (expoAudioModule) {
       if (typeof expoAudioModule.setAudioModeAsync === 'function') {
         await expoAudioModule.setAudioModeAsync({
@@ -32,45 +39,80 @@ export async function playEmergencySiren(): Promise<void> {
       }
 
       if (typeof expoAudioModule.createAudioPlayer === 'function') {
-        const player = expoAudioModule.createAudioPlayer(
-          require('../../assets/sounds/emergency_siren.wav')
-        );
-        player.loop = true;
-        if (typeof player.setVolume === 'function') {
-          player.setVolume(1.0);
-        } else {
-          player.volume = 1.0;
+        let soundSource: any;
+        try {
+          soundSource = require('../../assets/sounds/emergency_siren.mp3');
+        } catch {
+          try {
+            soundSource = require('../../assets/sounds/emergency_siren.wav');
+          } catch {
+            soundSource = null;
+          }
         }
-        player.play();
-        activePlayer = player;
+
+        if (soundSource) {
+          const player = expoAudioModule.createAudioPlayer(soundSource);
+          player.loop = true;
+          if (typeof player.setVolume === 'function') {
+            player.setVolume(1.0);
+          } else {
+            player.volume = 1.0;
+          }
+          player.play();
+          activePlayer = player;
+        }
       }
     }
 
-    // 3. Dialogo emergente para silenciar alarma
-    Alert.alert(
-      'ALERTA DE EMERGENCIA ACTIVA',
-      'Sirena acústica de emergencia en curso a máximo volumen.',
-      [
-        {
-          text: 'DETENER ALARMA',
-          style: 'destructive',
-          onPress: () => {
-            stopEmergencySiren();
+    // 3. Temporizador estricto de auto-apagado segun el tipo de evento
+    if (type === 'community') {
+      // Protocolo comunitario: maximo 3 segundos
+      autoCutoffTimer = setTimeout(() => {
+        stopEmergencySiren();
+      }, 3000);
+    } else if (type === 'seismic') {
+      // Protocolo sismico: maximo 5 segundos
+      autoCutoffTimer = setTimeout(() => {
+        stopEmergencySiren();
+      }, 5000);
+    } else if (type === 'test') {
+      // En modo prueba se muestra la alerta modal de corte manual y seguro a 10s
+      autoCutoffTimer = setTimeout(() => {
+        stopEmergencySiren();
+      }, 10000);
+
+      Alert.alert(
+        'PRUEBA DE SIRENA ALERA',
+        'Sirena acustica oficial y vibracion en ejecucion a volumen maximo.',
+        [
+          {
+            text: 'DETENER ALARMA',
+            style: 'destructive',
+            onPress: () => {
+              stopEmergencySiren();
+            },
           },
-        },
-      ],
-      { cancelable: false }
-    );
+        ],
+        { cancelable: false }
+      );
+    }
   } catch (error) {
     console.warn('[ALERA SOUND] Error al emitir sirena:', error);
+    await stopEmergencySiren();
   }
 }
 
 /**
- * Detiene inmediatamente la sirena y cancela la vibración.
+ * Detiene inmediatamente la sirena sonora, cancela la vibracion y limpia timers.
  */
 export async function stopEmergencySiren(): Promise<void> {
   isSirenActive = false;
+
+  if (autoCutoffTimer) {
+    clearTimeout(autoCutoffTimer);
+    autoCutoffTimer = null;
+  }
+
   try {
     Vibration.cancel();
     if (activePlayer) {

@@ -22,9 +22,9 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
 
     private static final Logger log = LoggerFactory.getLogger(UsgsDataProviderAdapter.class);
 
-    // Bounding Box para Colombia: Lat [-4.5, 13.5], Lon [-82.0, -66.5]
+    // Bounding Box para Colombia: Lat [-4.5, 13.5], Lon [-79.2, -66.5]
     private static final String USGS_COLOMBIA_URL =
-            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time&minmagnitude=1.0&limit=100&minlatitude=-4.5&maxlatitude=13.5&minlongitude=-82.0&maxlongitude=-66.5";
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time&minmagnitude=0.5&limit=200&minlatitude=-4.5&maxlatitude=13.5&minlongitude=-79.2&maxlongitude=-66.5";
 
     private final RestClient restClient;
 
@@ -80,6 +80,14 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
 
         if (props.mag() == null || geom.coordinates() == null || geom.coordinates().size() < 3) {
             return null;
+        }
+
+        // Filtro estricto: descartar eventos que corresponden al territorio de Panama
+        if (props.place() != null) {
+            String placeLower = props.place().toLowerCase();
+            if ((placeLower.contains("panama") || placeLower.contains("panamá")) && !placeLower.contains("colombia")) {
+                return null;
+            }
         }
 
         double longitude = geom.coordinates().get(0);

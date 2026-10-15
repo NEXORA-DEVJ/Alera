@@ -131,7 +131,7 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
     setIsTestingAlarm(true);
 
     if (loudSirenEnabled) {
-      await playEmergencySiren();
+      await playEmergencySiren('test');
     } else if (heavyVibrationEnabled) {
       Vibration.vibrate([0, 600, 200, 600, 200, 1200], true);
     }

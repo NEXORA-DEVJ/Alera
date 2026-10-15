@@ -1,20 +1,39 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "ALERA",
+    "slug": "alera",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0F12",
+      "dark": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0D0F12"
+      }
+    },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#F06A35",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "#{unread_notifications} alertas activas de ALERA"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alera.app"
     },
     "android": {
+      "package": "com.alera.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0B0D10",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/notification-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },

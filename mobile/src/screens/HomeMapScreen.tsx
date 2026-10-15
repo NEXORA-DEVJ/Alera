@@ -34,6 +34,7 @@ import {
 import { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { AleraFullLogo } from '../components/AleraBrand';
 import { api, generateUUID } from '../services/api';
 import { getRealDeviceLocation } from '../services/location';
 import { SeismicEvent } from '../types';
@@ -159,7 +160,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setLoading(true);
       setErrorMessage(null);
-      const data = await api.getRecentSeismicEvents(30);
+      const data = await api.getRecentSeismicEvents(100);
       setEvents(data || []);
       if (data && data.length > 0) {
         setSelectedEventId(data[0].id);
@@ -216,21 +217,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* 1. TOP HEADER BRAND CON TOGGLE DE TEMA */}
       <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <View style={styles.brandIconWrapper}>
-            <Activity size={22} color={colors.seismicAccent} strokeWidth={2.2} />
-          </View>
-          <View>
-            <View style={styles.brandTitleRow}>
-              <Text style={styles.brandTitleLight}>Sismo</Text>
-              <Text style={styles.brandTitleAccent}>Alera</Text>
-            </View>
-            <View style={styles.sgcStatusRow}>
-              <View style={styles.statusDotLive} />
-              <Text style={styles.sgcStatusText}>CONECTADO AL SGC COLOMBIA</Text>
-            </View>
-          </View>
-        </View>
+        <AleraFullLogo size={36} />
 
         <View style={styles.headerActionsRow}>
           {/* Botón de Cambio de Tema (Oscuro / Blanco) */}
@@ -383,10 +370,10 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           </View>
           <TouchableOpacity
             style={styles.viewAllRow}
-            onPress={() => navigation.navigate('CommunityAlerts')}
+            onPress={() => navigation.navigate('SeismicList')}
             activeOpacity={0.7}
           >
-            <Text style={styles.viewAllText}>Ver incidentes</Text>
+            <Text style={styles.viewAllText}>Ver lista completa</Text>
             <ChevronRight size={14} color={colors.textSecondary} strokeWidth={1.8} />
           </TouchableOpacity>
         </View>

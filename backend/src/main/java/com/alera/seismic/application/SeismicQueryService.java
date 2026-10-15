@@ -16,8 +16,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class SeismicQueryService implements GetRecentSeismicEventsUseCase, GetSeismicEventByIdUseCase {
 
-    private static final int DEFAULT_LIMIT = 20;
-    private static final int MAX_LIMIT = 100;
+    private static final int DEFAULT_LIMIT = 100;
+    private static final int MAX_LIMIT = 200;
 
     private final SeismicEventRepositoryPort repository;
 

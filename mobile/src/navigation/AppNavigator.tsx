@@ -1,12 +1,13 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Activity, Bell, Users, User } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeContext';
+import { AleraNavIcon } from '../components/AleraBrand';
 
 // Pantallas
 import { HomeMapScreen } from '../screens/HomeMapScreen';
 import { SeismicDetailScreen } from '../screens/SeismicDetailScreen';
+import { SeismicListScreen } from '../screens/SeismicListScreen';
 import { CommunityAlertsScreen } from '../screens/CommunityAlertsScreen';
 import { NewReportScreen } from '../screens/NewReportScreen';
 import { AlertSettingsScreen } from '../screens/AlertSettingsScreen';
@@ -16,6 +17,7 @@ import { SeismicEvent } from '../types';
 export type RootStackParamList = {
   MainTabs: undefined;
   SeismicDetail: { event?: SeismicEvent };
+  SeismicList: undefined;
   NewReport: undefined;
   AlertSettings: undefined;
   CommunityAlerts: undefined;
@@ -42,7 +44,7 @@ function BottomTabNavigator() {
           backgroundColor: isDark ? '#111317' : '#FFFFFF',
           borderTopColor: colors.surfaceCardBorder,
           borderTopWidth: 1,
-          height: 62,
+          height: 64,
           paddingBottom: 8,
           paddingTop: 8,
         },
@@ -54,50 +56,50 @@ function BottomTabNavigator() {
         },
       }}
     >
-      {/* Tab 1: Mapa Sísmico Nacional */}
+      {/* Tab 1: Mapa Sísmico Nacional con icono de mapa y pulso */}
       <Tab.Screen
         name="Mapa"
         component={HomeMapScreen}
         options={{
           tabBarLabel: 'Mapa',
           tabBarIcon: ({ color }) => (
-            <Activity size={20} color={color} strokeWidth={2} />
+            <AleraNavIcon tab="Mapa" color={color} size={22} />
           ),
         }}
       />
 
-      {/* Tab 2: Ajustes de Alerta y Sirena */}
+      {/* Tab 2: Ajustes de Alerta y Sirena con campana de ondas */}
       <Tab.Screen
         name="Alertas"
         component={AlertSettingsScreen}
         options={{
           tabBarLabel: 'Alertas',
           tabBarIcon: ({ color }) => (
-            <Bell size={20} color={color} strokeWidth={2} />
+            <AleraNavIcon tab="Alertas" color={color} size={22} />
           ),
         }}
       />
 
-      {/* Tab 3: Alertas Comunitarias Vecinales */}
+      {/* Tab 3: Alertas Comunitarias Vecinales con ondas de difusion */}
       <Tab.Screen
         name="Comunidad"
         component={CommunityAlertsScreen}
         options={{
           tabBarLabel: 'Comunidad',
           tabBarIcon: ({ color }) => (
-            <Users size={20} color={color} strokeWidth={2} />
+            <AleraNavIcon tab="Comunidad" color={color} size={22} />
           ),
         }}
       />
 
-      {/* Tab 4: Perfil y Estado del Dispositivo */}
+      {/* Tab 4: Perfil y Estado del Dispositivo con pulso */}
       <Tab.Screen
         name="Perfil"
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Perfil',
           tabBarIcon: ({ color }) => (
-            <User size={20} color={color} strokeWidth={2} />
+            <AleraNavIcon tab="Perfil" color={color} size={22} />
           ),
         }}
       />
@@ -118,6 +120,7 @@ export const AppNavigator: React.FC = () => {
     >
       <Stack.Screen name="MainTabs" component={BottomTabNavigator} />
       <Stack.Screen name="SeismicDetail" component={SeismicDetailScreen} />
+      <Stack.Screen name="SeismicList" component={SeismicListScreen} />
       <Stack.Screen name="NewReport" component={NewReportScreen} />
       <Stack.Screen name="AlertSettings" component={AlertSettingsScreen} />
       <Stack.Screen name="CommunityAlerts" component={CommunityAlertsScreen} />

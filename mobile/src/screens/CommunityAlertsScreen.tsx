@@ -15,7 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Circle } from 'react-native-maps';
-import { triggerLocalProximityAlert } from '../services/notifications';
+import {
+  triggerLocalProximityAlert,
+  isIncidentAlerted,
+  markIncidentAsAlerted,
+} from '../services/notifications';
 import {
   Search,
   Filter,
@@ -34,6 +38,7 @@ import {
 import { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { AleraCategoryIcon } from '../components/AleraBrand';
 import { api, generateUUID, resolveMediaUrl } from '../services/api';
 import { getRealDeviceLocation } from '../services/location';
 import { NearbyCommunityIncident, IncidentType } from '../types';
@@ -63,9 +68,6 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
   // Ubicación GPS real
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [detectedCity, setDetectedCity] = useState<string>('Buscando GPS...');
-
-  // Referencia para evitar alertar repetidamente sobre el mismo incidente en la misma sesión
-  const alertedIncidentsRef = useRef<Set<string>>(new Set());
 
   // Actualización automática cada vez que la pantalla toma el foco (por ejemplo, al volver de crear un reporte)
   useFocusEffect(
@@ -126,15 +128,26 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
         const hazard = data.find(
           (inc) =>
             inc.distanceMeters <= inc.incident.radiusMeters &&
-            inc.incident.status !== 'RESOLVED'
+            inc.incident.status !== 'RESOLVED' &&
+            !isIncidentAlerted(inc.incident.id)
         );
 
-        if (hazard && !alertedIncidentsRef.current.has(hazard.incident.id)) {
-          alertedIncidentsRef.current.add(hazard.incident.id);
+        if (hazard) {
+          markIncidentAsAlerted(hazard.incident.id);
+
+          const typeLabel =
+            hazard.incident.incidentType === 'LANDSLIDE' ? 'Derrumbe en vía' :
+            hazard.incident.incidentType === 'FIRE' ? 'Incendio activo' :
+            hazard.incident.incidentType === 'STRUCTURAL_DAMAGE' ? 'Falla estructural' : 'Vía obstruida';
+          const distKm = (hazard.distanceMeters / 1000).toFixed(1);
+          const radKm = (hazard.incident.radiusMeters / 1000).toFixed(1);
+
           triggerLocalProximityAlert(
-            `ALERTA COMUNITARIA: ${hazard.incident.incidentType}`,
-            `Estás dentro del radio de afectación (${(hazard.distanceMeters / 1000).toFixed(1)} km). ${hazard.incident.description || ''}`,
-            true
+            `ALERTA COMUNITARIA: ${typeLabel}`,
+            `Estás dentro del radio de afectación (${distKm} km). ${hazard.incident.description || ''}`,
+            true,
+            'community',
+            `Radio de Afectación: ${radKm} km`
           );
         }
       }
@@ -169,15 +182,15 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
   const getIncidentIcon = (type: IncidentType) => {
     switch (type) {
       case 'FIRE':
-        return <Flame size={16} color={colors.seismicRed} strokeWidth={2} />;
+        return <AleraCategoryIcon type="FIRE" size={18} color={colors.seismicRed} />;
       case 'LANDSLIDE':
-        return <AlertTriangle size={16} color={colors.amberAlertText} strokeWidth={2} />;
+        return <AleraCategoryIcon type="LANDSLIDE" size={18} color={colors.amberAlertText} />;
       case 'STRUCTURAL_DAMAGE':
-        return <Building2 size={16} color={colors.seismicAccent} strokeWidth={2} />;
+        return <AleraCategoryIcon type="STRUCTURAL_DAMAGE" size={18} color={colors.seismicAccent} />;
       case 'ACCIDENT':
       case 'ROAD_BLOCK':
       default:
-        return <Car size={16} color={colors.textPrimary} strokeWidth={2} />;
+        return <AleraCategoryIcon type="ROAD_BLOCK" size={18} color={colors.textPrimary} />;
     }
   };
 
