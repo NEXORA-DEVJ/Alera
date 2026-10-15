@@ -207,9 +207,32 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     return colors.amberAlertText;
   };
 
-  const filteredEvents = events.filter((e) =>
-    e.epicenterDescription.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filtro de temporalidad: 'TODAY' (ultimas 24 horas) o 'ALL' (todos los recientes)
+  const [timeFilter, setTimeFilter] = useState<'TODAY' | 'ALL'>('TODAY');
+
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  const todayEventsCount = useMemo(() => {
+    const now = Date.now();
+    return events.filter((e) => {
+      const eventTime = new Date(e.originTime).getTime();
+      return now - eventTime <= ONE_DAY_MS;
+    }).length;
+  }, [events]);
+
+  const filteredEvents = useMemo(() => {
+    const now = Date.now();
+    return events.filter((e) => {
+      const matchesSearch = e.epicenterDescription.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+
+      if (timeFilter === 'TODAY') {
+        const eventTime = new Date(e.originTime).getTime();
+        return now - eventTime <= ONE_DAY_MS;
+      }
+      return true;
+    });
+  }, [events, searchQuery, timeFilter]);
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
@@ -267,6 +290,60 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
             </TouchableOpacity>
           )}
         </View>
+      </View>
+
+      {/* 2.1 SELECTOR DE TEMPORALIDAD DEL MAPA (SISMOS DE HOY VS HISTORIAL) */}
+      <View style={styles.timeFilterRow}>
+        <TouchableOpacity
+          style={[
+            styles.timeFilterChip,
+            timeFilter === 'TODAY' && styles.timeFilterChipActive,
+          ]}
+          onPress={() => setTimeFilter('TODAY')}
+          activeOpacity={0.7}
+        >
+          <View
+            style={[
+              styles.timeFilterDot,
+              { backgroundColor: timeFilter === 'TODAY' ? colors.seismicAccent : colors.textMuted },
+            ]}
+          />
+          <Text
+            style={[
+              styles.timeFilterText,
+              timeFilter === 'TODAY' && styles.timeFilterTextActive,
+            ]}
+          >
+            Hoy (24h): {todayEventsCount}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.timeFilterChip,
+            timeFilter === 'ALL' && styles.timeFilterChipActive,
+          ]}
+          onPress={() => setTimeFilter('ALL')}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.timeFilterText,
+              timeFilter === 'ALL' && styles.timeFilterTextActive,
+            ]}
+          >
+            Todos ({events.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.historyLinkButton}
+          onPress={() => navigation.navigate('SeismicList')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.historyLinkText}>Ver Lista</Text>
+          <ChevronRight size={14} color={colors.seismicAccent} strokeWidth={2} />
+        </TouchableOpacity>
       </View>
 
       {/* 3. NATIVE MAP CONTAINER */}
@@ -593,6 +670,55 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
       color: colors.textPrimary,
       fontSize: 13,
+    },
+    timeFilterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      marginBottom: 10,
+      gap: 8,
+    },
+    timeFilterChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.surfaceCardBorder,
+      gap: 6,
+    },
+    timeFilterChipActive: {
+      backgroundColor: isDark ? 'rgba(240, 106, 53, 0.15)' : 'rgba(240, 106, 53, 0.1)',
+      borderColor: colors.seismicAccent,
+    },
+    timeFilterDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    timeFilterText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    timeFilterTextActive: {
+      color: colors.seismicAccent,
+      fontWeight: '700',
+    },
+    historyLinkButton: {
+      marginLeft: 'auto',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      paddingVertical: 4,
+      paddingHorizontal: 4,
+    },
+    historyLinkText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.seismicAccent,
     },
     mapContainer: {
       flex: 1,

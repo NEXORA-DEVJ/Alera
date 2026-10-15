@@ -22,9 +22,10 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
 
     private static final Logger log = LoggerFactory.getLogger(UsgsDataProviderAdapter.class);
 
-    // Bounding Box para Colombia: Lat [-4.5, 13.5], Lon [-79.2, -66.5]
-    private static final String USGS_COLOMBIA_URL =
-            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time&minmagnitude=0.5&limit=200&minlatitude=-4.5&maxlatitude=13.5&minlongitude=-79.2&maxlongitude=-66.5";
+    // Bounding Box regional ampliado: cubre Colombia y paises limitrofes
+    // (Venezuela, Panama, Ecuador, Peru, Brasil): Lat [-6.0, 15.0], Lon [-84.0, -60.0]
+    private static final String USGS_REGIONAL_URL =
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time&minmagnitude=1.0&limit=250&minlatitude=-6.0&maxlatitude=15.0&minlongitude=-84.0&maxlongitude=-60.0";
 
     private final RestClient restClient;
 
@@ -40,9 +41,9 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
     @Override
     public List<SeismicEvent> fetchRecentEvents() {
         try {
-            log.info("Consultando eventos sismicos de Colombia en USGS API...");
+            log.info("Consultando eventos sismicos de Colombia y region fronteriza en USGS API...");
             UsgsFeatureCollectionDto response = restClient.get()
-                    .uri(USGS_COLOMBIA_URL)
+                    .uri(USGS_REGIONAL_URL)
                     .retrieve()
                     .body(UsgsFeatureCollectionDto.class);
 
@@ -62,7 +63,7 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
                 }
             }
 
-            log.info("USGS: Se obtuvieron y procesaron {} sismos para Colombia.", events.size());
+            log.info("USGS: Se obtuvieron y procesaron {} sismos relevantes para Colombia y zonas limitrofes.", events.size());
             return events;
         } catch (Exception ex) {
             log.error("Fallo al consultar la API sismica de USGS: {}", ex.getMessage());
@@ -82,21 +83,40 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
             return null;
         }
 
-        // Filtro estricto: descartar eventos que corresponden al territorio de Panama
-        if (props.place() != null) {
-            String placeLower = props.place().toLowerCase();
-            if ((placeLower.contains("panama") || placeLower.contains("panamá")) && !placeLower.contains("colombia")) {
-                return null;
-            }
-        }
-
         double longitude = geom.coordinates().get(0);
         double latitude = geom.coordinates().get(1);
         double depthKm = geom.coordinates().get(2);
+        double mag = props.mag();
 
-        // Mapeo defensivo hacia nuestros Value Objects
+        String rawPlace = props.place() != null ? props.place() : "Epicentro No Especificado";
+        String placeLower = rawPlace.toLowerCase();
+        boolean isInternalColombia = placeLower.contains("colombia");
+
+        // Evaluacion de sismos internacionales transfronterizos (Venezuela, Panama, Ecuador, Peru, Brasil)
+        if (!isInternalColombia) {
+            // Regla estricta: solo se alertan sismos internacionales si su Magnitud es mayor o igual a 5.5
+            if (mag < 5.5) {
+                return null;
+            }
+
+            // Calculo de distancia desde el epicentro exterior hacia el limite fronterizo mas cercano de Colombia
+            double closestColLat = Math.max(-4.2, Math.min(12.5, latitude));
+            double closestColLon = Math.max(-79.0, Math.min(-66.8, longitude));
+            double distanceToColombiaBorder = calculateDistanceKm(latitude, longitude, closestColLat, closestColLon);
+
+            // Radio de propagacion de ondas perceptibles para M >= 5.5
+            double maxWaveRadiusKm = (mag - 3.5) * 200.0; // ej: M 5.5 -> 400 km; M 6.0 -> 500 km
+
+            if (distanceToColombiaBorder > maxWaveRadiusKm) {
+                // El sismo es fuerte pero demasiado lejano para que sus ondas se sientan en Colombia
+                return null;
+            }
+
+            rawPlace = "[Sismo Internacional con Ondas en Colombia] " + rawPlace;
+        }
+
         Coordinates coordinates = new Coordinates(latitude, longitude);
-        Magnitude magnitude = new Magnitude(props.mag());
+        Magnitude magnitude = new Magnitude(mag);
         Depth depth = new Depth(depthKm >= 0.0 ? depthKm : 0.0);
 
         Instant originTime = props.time() != null ? Instant.ofEpochMilli(props.time()) : Instant.now();
@@ -111,9 +131,20 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
                 magnitude,
                 depth,
                 coordinates,
-                props.place(),
+                rawPlace,
                 originTime,
                 status
         );
+    }
+
+    private double calculateDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }

@@ -71,6 +71,16 @@ export const api = {
   getSeismicEventById: (id: string): Promise<SeismicEvent> =>
     request<SeismicEvent>(`/seismic-events/${id}`),
 
+  // Alertas de Emergencia Activas en Vivo (Simulacros y Eventos Críticos)
+  getActiveEmergencyAlert: (): Promise<{
+    id: string;
+    type: 'seismic' | 'community';
+    title: string;
+    body: string;
+    magnitude?: number;
+    timestamp: number;
+  } | null> => request<any>('/seismic-events/active-emergency'),
+
   // Incidentes Comunitarios
   getNearbyCommunityIncidents: (
     lat: number,

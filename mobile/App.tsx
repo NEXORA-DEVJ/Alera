@@ -5,7 +5,13 @@ import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AleraNotificationBanner } from './src/components/AleraNotificationBanner';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
-import { registerForPushNotificationsAsync } from './src/services/notifications';
+import {
+  registerForPushNotificationsAsync,
+  triggerLocalProximityAlert,
+  isIncidentAlerted,
+  markIncidentAsAlerted,
+} from './src/services/notifications';
+import { api } from './src/services/api';
 import { playEmergencySiren } from './src/services/sound';
 import * as Notifications from 'expo-notifications';
 
@@ -15,6 +21,7 @@ function MainApp() {
   useEffect(() => {
     registerForPushNotificationsAsync();
 
+    // 1. Escuchador de notificaciones push del sistema operativo
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
       const content = notification.request.content;
       const data = (content.data || {}) as Record<string, any>;
@@ -35,8 +42,31 @@ function MainApp() {
       }
     });
 
+    // 2. Sincronizacion activa en tiempo real de emergencias y simulacros desde el backend
+    const checkActiveEmergency = async () => {
+      try {
+        const emergency = await api.getActiveEmergencyAlert();
+        if (emergency && emergency.id && !isIncidentAlerted(emergency.id)) {
+          markIncidentAsAlerted(emergency.id);
+          const subtitle = emergency.magnitude ? `Magnitud: M ${emergency.magnitude}` : undefined;
+          await triggerLocalProximityAlert(
+            emergency.title,
+            emergency.body,
+            true,
+            emergency.type || 'seismic',
+            subtitle
+          );
+        }
+      } catch {
+        // Si el backend no esta respondiendo temporalmente, omitir
+      }
+    };
+
+    const emergencyInterval = setInterval(checkActiveEmergency, 2000);
+
     return () => {
       subscription.remove();
+      clearInterval(emergencyInterval);
     };
   }, []);
 
