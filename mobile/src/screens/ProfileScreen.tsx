@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User,
@@ -31,10 +32,13 @@ import {
   Settings,
   X,
   Compass,
+  Play,
+  Volume2,
 } from 'lucide-react-native';
 import { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { getRealDeviceLocation } from '../services/location';
+import { getCommunityStats, clearAlertHistory, triggerLocalProximityAlert } from '../services/notifications';
 
 interface Props {
   navigation: any;
@@ -42,8 +46,17 @@ interface Props {
 
 const DEVICE_STORAGE_KEY = '@alera_device_id';
 const NICKNAME_STORAGE_KEY = '@alera_user_nickname';
+const CITIZEN_TITLE_STORAGE_KEY = '@alera_user_title';
 const MONITORED_CITY_STORAGE_KEY = '@alera_monitored_city';
 const DISTANCE_UNIT_STORAGE_KEY = '@alera_unit_preference';
+
+const CITIZEN_TITLE_PRESETS = [
+  'Monitor de Emergencias',
+  'Observador Sísmico',
+  'Brigadista Comunitario',
+  'Vigilante Vecinal',
+  'Ciudadano Activo',
+];
 
 const COLOMBIAN_CITIES = [
   'Bogotá D.C.',
@@ -70,6 +83,16 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
   const [isEditingNickname, setIsEditingNickname] = useState<boolean>(false);
   const [tempNickname, setTempNickname] = useState<string>('');
 
+  const [citizenTitle, setCitizenTitle] = useState<string>('Monitor de Emergencias');
+  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
+  const [tempTitle, setTempTitle] = useState<string>('');
+
+  const [stats, setStats] = useState<{ alertsReceived: number; reportsCreated: number; votesValidated: number }>({
+    alertsReceived: 0,
+    reportsCreated: 0,
+    votesValidated: 0,
+  });
+
   const [monitoredCity, setMonitoredCity] = useState<string>('Bucaramanga');
   const [isCityModalVisible, setIsCityModalVisible] = useState<boolean>(false);
   const [gpsCity, setGpsCity] = useState<string>('Detectando...');
@@ -80,6 +103,12 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
     loadUserData();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
   const loadUserData = async () => {
     try {
       const storedId = await AsyncStorage.getItem(DEVICE_STORAGE_KEY);
@@ -88,11 +117,17 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
       const storedNick = await AsyncStorage.getItem(NICKNAME_STORAGE_KEY);
       if (storedNick) setNickname(storedNick);
 
+      const storedTitle = await AsyncStorage.getItem(CITIZEN_TITLE_STORAGE_KEY);
+      if (storedTitle) setCitizenTitle(storedTitle);
+
       const storedCity = await AsyncStorage.getItem(MONITORED_CITY_STORAGE_KEY);
       if (storedCity) setMonitoredCity(storedCity);
 
       const storedUnit = await AsyncStorage.getItem(DISTANCE_UNIT_STORAGE_KEY);
       if (storedUnit === 'mi' || storedUnit === 'km') setUnitPreference(storedUnit);
+
+      const realStats = await getCommunityStats();
+      setStats(realStats);
 
       const loc = await getRealDeviceLocation();
       if (loc && loc.city) {
@@ -114,6 +149,15 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
     setIsEditingNickname(false);
   };
 
+  const handleSaveTitle = async () => {
+    const trimmed = tempTitle.trim();
+    if (trimmed.length > 0) {
+      setCitizenTitle(trimmed);
+      await AsyncStorage.setItem(CITIZEN_TITLE_STORAGE_KEY, trimmed);
+    }
+    setIsEditingTitle(false);
+  };
+
   const handleSelectCity = async (city: string) => {
     setMonitoredCity(city);
     await AsyncStorage.setItem(MONITORED_CITY_STORAGE_KEY, city);
@@ -126,18 +170,36 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
     await AsyncStorage.setItem(DISTANCE_UNIT_STORAGE_KEY, newUnit);
   };
 
+  const [isDrillRunning, setIsDrillRunning] = useState<boolean>(false);
+
+  const handleRunLiveDrill = async () => {
+    if (isDrillRunning) return;
+    setIsDrillRunning(true);
+    await triggerLocalProximityAlert(
+      'ALERTA SÍSMICA ALERA - M 6.2',
+      'SIMULACRO EN VIVO: Mantén la calma y ubícate en una zona segura.',
+      true,
+      'seismic',
+      'Epicentro Simulado: Mesa de los Santos (140 km prof)'
+    );
+    setTimeout(() => {
+      setIsDrillRunning(false);
+    }, 5500);
+  };
+
   const handleClearAlertCache = async () => {
     Alert.alert(
       'Limpiar Registro de Alertas',
-      '¿Deseas vaciar el historial de incidentes notificados en este dispositivo?',
+      '¿Deseas vaciar el historial de incidentes y notificaciones almacenadas en este dispositivo?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Limpiar',
+          text: 'Limpiar Todo',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('@alera_alerted_incidents');
-            Alert.alert('Registro Limpio', 'Se ha restablecido la memoria de alertas de la app.');
+            await clearAlertHistory();
+            setStats((prev) => ({ ...prev, alertsReceived: 0 }));
+            Alert.alert('Registro Limpio', 'Se ha restablecido el historial de alertas y descartado las notificaciones activas.');
           },
         },
       ]
@@ -215,10 +277,18 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.rankPill}>
-              <Award size={12} color={colors.seismicAccent} strokeWidth={2} />
-              <Text style={styles.rankPillText}>Centinela Comunitario Activo</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.rankPill}
+              activeOpacity={0.7}
+              onPress={() => {
+                setTempTitle(citizenTitle);
+                setIsEditingTitle(true);
+              }}
+            >
+              <Award size={13} color={colors.seismicAccent} strokeWidth={2} />
+              <Text style={styles.rankPillText}>{citizenTitle}</Text>
+              <Edit2 size={11} color={colors.textSecondary} style={{ marginLeft: 4 }} strokeWidth={1.8} />
+            </TouchableOpacity>
 
             <Text style={styles.deviceIdText} numberOfLines={1}>
               Dispositivo: {shortenedId}
@@ -312,6 +382,39 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
             </View>
             <ChevronRight size={20} color={colors.seismicAccent} strokeWidth={2} />
           </TouchableOpacity>
+
+          {/* SIMULACRO DE ALERTA SÍSMICA EN VIVO */}
+          <TouchableOpacity
+            style={[
+              styles.liveDrillCard,
+              isDrillRunning && { borderColor: colors.seismicRed, backgroundColor: isDark ? '#2B1414' : '#FEE2E2' },
+            ]}
+            onPress={handleRunLiveDrill}
+            activeOpacity={0.8}
+          >
+            <View
+              style={[
+                styles.drillIconBox,
+                { backgroundColor: isDrillRunning ? colors.seismicRed : colors.seismicAccent },
+              ]}
+            >
+              {isDrillRunning ? (
+                <Volume2 size={20} color="#FFFFFF" strokeWidth={2.2} />
+              ) : (
+                <Play size={20} color="#FFFFFF" strokeWidth={2.2} />
+              )}
+            </View>
+            <View style={styles.drillCol}>
+              <Text style={styles.drillTitle}>
+                {isDrillRunning ? 'Simulacro Activo en Reproducción...' : 'Simulacro en Vivo: Probar Sirena (M 6.2)'}
+              </Text>
+              <Text style={styles.drillSubtitle}>
+                {isDrillRunning
+                  ? 'Sirena oficial de 5 segundos y vibración háptica continua'
+                  : 'Prueba inmediata en tu celular del sonido, banner y vibración'}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* CONTRIBUCIÓN COMUNITARIA */}
@@ -320,17 +423,17 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
               <Bell size={18} color={colors.seismicAccent} strokeWidth={2} />
-              <Text style={styles.metricNumber}>18</Text>
+              <Text style={styles.metricNumber}>{stats.alertsReceived}</Text>
               <Text style={styles.metricLabel}>Alertas Recibidas</Text>
             </View>
             <View style={styles.metricCard}>
               <Flame size={18} color={colors.amberAlertText} strokeWidth={2} />
-              <Text style={styles.metricNumber}>3</Text>
+              <Text style={styles.metricNumber}>{stats.reportsCreated}</Text>
               <Text style={styles.metricLabel}>Reportes Creados</Text>
             </View>
             <View style={styles.metricCard}>
               <ThumbsUp size={18} color={colors.successGreen} strokeWidth={2} />
-              <Text style={styles.metricNumber}>14</Text>
+              <Text style={styles.metricNumber}>{stats.votesValidated}</Text>
               <Text style={styles.metricLabel}>Votos Validados</Text>
             </View>
           </View>
@@ -424,6 +527,67 @@ export const ProfileScreen: React.FC<Props> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.modalConfirmButton}
                 onPress={handleSaveNickname}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalConfirmText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL EDITAR TÍTULO O ROL CIUDADANO */}
+      <Modal visible={isEditingTitle} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Personalizar Título Comunitario</Text>
+            <Text style={styles.modalSubtitle}>
+              Elige un distintivo que te identifique en la red ALERA o escribe uno personalizado.
+            </Text>
+            <TextInput
+              style={styles.nicknameInput}
+              value={tempTitle}
+              onChangeText={setTempTitle}
+              placeholder="Ej: Monitor de Emergencias"
+              placeholderTextColor={colors.textMuted}
+              maxLength={32}
+            />
+            <View style={styles.presetPillsRow}>
+              {CITIZEN_TITLE_PRESETS.map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={[
+                    styles.presetPill,
+                    tempTitle === p && {
+                      borderColor: colors.seismicAccent,
+                      backgroundColor: isDark ? '#2B1A14' : '#FFEDD5',
+                    },
+                  ]}
+                  onPress={() => setTempTitle(p)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.presetPillText,
+                      tempTitle === p && { color: colors.seismicAccent, fontWeight: '700' },
+                    ]}
+                  >
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsEditingTitle(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={handleSaveTitle}
                 activeOpacity={0.7}
               >
                 <Text style={styles.modalConfirmText}>Guardar</Text>
@@ -674,6 +838,38 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       padding: 14,
       gap: 12,
     },
+    liveDrillCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.seismicAccent,
+      borderRadius: 14,
+      padding: 14,
+      gap: 12,
+      marginTop: 10,
+    },
+    drillIconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    drillCol: {
+      flex: 1,
+      gap: 3,
+    },
+    drillTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    drillSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 16,
+    },
     metricsRow: {
       flexDirection: 'row',
       gap: 10,
@@ -766,6 +962,25 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textPrimary,
       fontSize: 14,
       fontWeight: '600',
+    },
+    presetPillsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 6,
+    },
+    presetPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.surfaceInputBorder,
+      backgroundColor: colors.surfaceInput,
+    },
+    presetPillText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
     },
     modalButtonsRow: {
       flexDirection: 'row',

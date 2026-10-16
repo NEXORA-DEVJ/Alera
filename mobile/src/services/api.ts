@@ -56,7 +56,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   // Sismos
-  getRecentSeismicEvents: (limit: number = 100): Promise<SeismicEvent[]> =>
+  getRecentSeismicEvents: (limit: number = 500): Promise<SeismicEvent[]> =>
     request<SeismicEvent[]>(`/seismic-events?limit=${limit}`),
 
   getNearbySeismicEvents: (

@@ -113,7 +113,7 @@ export const SeismicListScreen: React.FC<Props> = ({ navigation }) => {
       setLoading(true);
       const [loc, seismicList] = await Promise.all([
         getRealDeviceLocation(),
-        api.getRecentSeismicEvents(100),
+        api.getRecentSeismicEvents(500),
       ]);
       if (loc) {
         setUserCoord({ latitude: loc.latitude, longitude: loc.longitude });
@@ -129,7 +129,7 @@ export const SeismicListScreen: React.FC<Props> = ({ navigation }) => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const data = await api.getRecentSeismicEvents(100);
+      const data = await api.getRecentSeismicEvents(500);
       setEvents(data || []);
     } catch (err) {
       console.warn('[ALERA SEISMIC LIST] Error refrescando sismos:', err);

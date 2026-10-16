@@ -160,7 +160,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setLoading(true);
       setErrorMessage(null);
-      const data = await api.getRecentSeismicEvents(100);
+      const data = await api.getRecentSeismicEvents(500);
       setEvents(data || []);
       if (data && data.length > 0) {
         setSelectedEventId(data[0].id);
@@ -204,7 +204,8 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
   const getMagnitudeColor = (mag: number): string => {
     if (mag >= 5.0) return colors.seismicRed;
     if (mag >= 4.0) return colors.seismicAccent;
-    return colors.amberAlertText;
+    if (mag >= 3.0) return colors.amberAlertText;
+    return colors.successGreen;
   };
 
   // Filtro de temporalidad: 'TODAY' (ultimas 24 horas) o 'ALL' (todos los recientes)
@@ -472,7 +473,9 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         ) : filteredEvents.length === 0 ? (
           <View style={styles.centerFeedbackBox}>
             <Text style={styles.feedbackText}>
-              No se registran sismos en este momento en la base de datos.
+              {timeFilter === 'TODAY'
+                ? 'No se registran sismos en las últimas 24 horas en el catálogo.'
+                : 'No se registran sismos en este momento en la base de datos.'}
             </Text>
           </View>
         ) : (

@@ -13,6 +13,9 @@ import {
 } from './src/services/notifications';
 import { api } from './src/services/api';
 import { playEmergencySiren } from './src/services/sound';
+import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateUUID } from './src/services/api';
 import * as Notifications from 'expo-notifications';
 
 function MainApp() {
@@ -20,6 +23,12 @@ function MainApp() {
 
   useEffect(() => {
     registerForPushNotificationsAsync();
+
+    // Iniciar rastreo continuo de coordenadas para el backend
+    AsyncStorage.getItem('@alera_device_id').then((id) => {
+      const devId = id && id.length === 36 ? id : generateUUID();
+      startContinuousLocationTracking(devId);
+    });
 
     // 1. Escuchador de notificaciones push del sistema operativo
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
@@ -43,19 +52,43 @@ function MainApp() {
     });
 
     // 2. Sincronizacion activa en tiempo real de emergencias y simulacros desde el backend
+    let lastProcessedEmergencyTime = 0;
+
     const checkActiveEmergency = async () => {
       try {
         const emergency = await api.getActiveEmergencyAlert();
-        if (emergency && emergency.id && !isIncidentAlerted(emergency.id)) {
-          markIncidentAsAlerted(emergency.id);
-          const subtitle = emergency.magnitude ? `Magnitud: M ${emergency.magnitude}` : undefined;
-          await triggerLocalProximityAlert(
-            emergency.title,
-            emergency.body,
-            true,
-            emergency.type || 'seismic',
-            subtitle
-          );
+        if (emergency && emergency.id) {
+          const isDrillOrTest =
+            (emergency.title && emergency.title.toUpperCase().includes('SIMULACRO')) ||
+            (emergency.title && emergency.title.toUpperCase().includes('PRUEBA')) ||
+            (emergency.id && emergency.id.toLowerCase().includes('test'));
+
+          const eventTimestamp = emergency.timestamp || Date.now();
+
+          // Para simulacros: permitir repeticion de prueba si es una emision reciente (menos de 30 segundos)
+          if (isDrillOrTest) {
+            if (eventTimestamp > lastProcessedEmergencyTime && (Date.now() - eventTimestamp < 30000)) {
+              lastProcessedEmergencyTime = eventTimestamp;
+              const subtitle = emergency.magnitude ? `Magnitud: M ${emergency.magnitude}` : undefined;
+              await triggerLocalProximityAlert(
+                emergency.title,
+                emergency.body,
+                true,
+                emergency.type || 'seismic',
+                subtitle
+              );
+            }
+          } else if (!isIncidentAlerted(emergency.id)) {
+            markIncidentAsAlerted(emergency.id);
+            const subtitle = emergency.magnitude ? `Magnitud: M ${emergency.magnitude}` : undefined;
+            await triggerLocalProximityAlert(
+              emergency.title,
+              emergency.body,
+              true,
+              emergency.type || 'seismic',
+              subtitle
+            );
+          }
         }
       } catch {
         // Si el backend no esta respondiendo temporalmente, omitir
@@ -67,6 +100,7 @@ function MainApp() {
     return () => {
       subscription.remove();
       clearInterval(emergencyInterval);
+      stopContinuousLocationTracking();
     };
   }, []);
 
