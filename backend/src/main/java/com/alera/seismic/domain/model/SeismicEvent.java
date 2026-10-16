@@ -3,11 +3,14 @@ package com.alera.seismic.domain.model;
 import com.alera.shared.domain.Coordinates;
 import com.alera.shared.domain.DomainException;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-public class SeismicEvent {
+public class SeismicEvent implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final UUID id;
     private final SeismicSource source;

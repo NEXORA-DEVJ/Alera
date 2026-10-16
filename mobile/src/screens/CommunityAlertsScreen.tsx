@@ -19,6 +19,7 @@ import {
   triggerLocalProximityAlert,
   isIncidentAlerted,
   markIncidentAsAlerted,
+  incrementUserVotesCount,
 } from '../services/notifications';
 import {
   Search,
@@ -163,6 +164,7 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
       setVotingIncidentId(incidentId);
       const validDeviceId = deviceId && deviceId.length === 36 ? deviceId : generateUUID();
       await api.confirmIncident(incidentId, validDeviceId, voteType);
+      incrementUserVotesCount().catch(() => {});
       Alert.alert(
         'Voto Registrado',
         voteType === 'STILL_ACTIVE'

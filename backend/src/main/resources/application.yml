@@ -5,6 +5,10 @@ spring:
   application:
     name: alera-backend
 
+  threads:
+    virtual:
+      enabled: true
+
   servlet:
     multipart:
       max-file-size: 10MB
@@ -15,6 +19,19 @@ spring:
     username: ${POSTGRES_USER:alera_user}
     password: ${POSTGRES_PASSWORD:alera_dev_password}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 20000
+      leak-detection-threshold: 2000
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 30000ms
+      cache-null-values: false
 
   jpa:
     open-in-view: false
@@ -49,3 +66,6 @@ management:
 alera:
   storage:
     upload-dir: ${ALERA_UPLOAD_DIR:./uploads/incidents}
+  firebase:
+    credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+    credentials-json: ${FIREBASE_CREDENTIALS_JSON:}

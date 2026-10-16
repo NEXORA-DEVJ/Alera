@@ -171,16 +171,22 @@ export async function triggerLocalProximityAlert(
     if (enableSiren) {
       await playEmergencySiren(type);
     }
+
+    // Registrar incremento en estadísticas ciudadanas
+    await incrementAlertsReceivedCount();
   } catch (err) {
     console.warn('[ALERA ALERTA] Fallo al despachar alerta local:', err);
   }
 }
 
 // -----------------------------------------------------------------------------
-// Registro Global de Desduplicación de Incidentes
-// Garantiza que cada incidente se alerte estrictamente una sola vez por usuario.
+// Registro Global de Desduplicación de Incidentes y Reputación Ciudadana
 // -----------------------------------------------------------------------------
 const ALERTED_INCIDENTS_STORAGE_KEY = '@alera_alerted_incidents';
+const ALERTS_RECEIVED_COUNT_KEY = '@alera_alerts_received_count';
+const USER_REPORTS_COUNT_KEY = '@alera_user_reports_count';
+const USER_VOTES_COUNT_KEY = '@alera_user_votes_count';
+
 const alertedIncidentsCache = new Set<string>();
 
 AsyncStorage.getItem(ALERTED_INCIDENTS_STORAGE_KEY)
@@ -219,3 +225,77 @@ export function isIncidentAlerted(incidentId: string): boolean {
   if (!incidentId) return false;
   return alertedIncidentsCache.has(incidentId);
 }
+
+export async function getCommunityStats(): Promise<{
+  alertsReceived: number;
+  reportsCreated: number;
+  votesValidated: number;
+}> {
+  try {
+    const [alertsStr, reportsStr, votesStr] = await Promise.all([
+      AsyncStorage.getItem(ALERTS_RECEIVED_COUNT_KEY),
+      AsyncStorage.getItem(USER_REPORTS_COUNT_KEY),
+      AsyncStorage.getItem(USER_VOTES_COUNT_KEY),
+    ]);
+
+    return {
+      alertsReceived: alertsStr ? Math.max(0, parseInt(alertsStr, 10) || 0) : 0,
+      reportsCreated: reportsStr ? Math.max(0, parseInt(reportsStr, 10) || 0) : 0,
+      votesValidated: votesStr ? Math.max(0, parseInt(votesStr, 10) || 0) : 0,
+    };
+  } catch {
+    return { alertsReceived: 0, reportsCreated: 0, votesValidated: 0 };
+  }
+}
+
+export async function incrementAlertsReceivedCount(): Promise<number> {
+  try {
+    const current = await AsyncStorage.getItem(ALERTS_RECEIVED_COUNT_KEY);
+    const count = (current ? parseInt(current, 10) || 0 : 0) + 1;
+    await AsyncStorage.setItem(ALERTS_RECEIVED_COUNT_KEY, count.toString());
+    return count;
+  } catch {
+    return 1;
+  }
+}
+
+export async function incrementUserReportsCount(): Promise<number> {
+  try {
+    const current = await AsyncStorage.getItem(USER_REPORTS_COUNT_KEY);
+    const count = (current ? parseInt(current, 10) || 0 : 0) + 1;
+    await AsyncStorage.setItem(USER_REPORTS_COUNT_KEY, count.toString());
+    return count;
+  } catch {
+    return 1;
+  }
+}
+
+export async function incrementUserVotesCount(): Promise<number> {
+  try {
+    const current = await AsyncStorage.getItem(USER_VOTES_COUNT_KEY);
+    const count = (current ? parseInt(current, 10) || 0 : 0) + 1;
+    await AsyncStorage.setItem(USER_VOTES_COUNT_KEY, count.toString());
+    return count;
+  } catch {
+    return 1;
+  }
+}
+
+export async function clearAlertHistory(): Promise<void> {
+  try {
+    // 1. Limpiar memoria volátil
+    alertedIncidentsCache.clear();
+
+    // 2. Limpiar almacenamiento persistente
+    await Promise.all([
+      AsyncStorage.removeItem(ALERTED_INCIDENTS_STORAGE_KEY),
+      AsyncStorage.setItem(ALERTS_RECEIVED_COUNT_KEY, '0'),
+    ]);
+
+    // 3. Cancelar y descartar notificaciones activas en la bandeja del sistema
+    await Notifications.dismissAllNotificationsAsync().catch(() => {});
+  } catch (err) {
+    console.warn('[ALERA] Error al limpiar historial de alertas:', err);
+  }
+}
+

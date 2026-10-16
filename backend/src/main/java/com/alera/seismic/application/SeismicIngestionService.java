@@ -5,6 +5,7 @@ import com.alera.seismic.domain.port.in.IngestSeismicEventsUseCase;
 import com.alera.seismic.domain.port.in.IngestionResult;
 import com.alera.seismic.domain.port.out.SeismicDataProviderPort;
 import com.alera.seismic.domain.port.out.SeismicEventRepositoryPort;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ public class SeismicIngestionService implements IngestSeismicEventsUseCase {
 
     @Override
     @Transactional
+    @CacheEvict(value = "recent_seisms", allEntries = true)
     public IngestionResult execute(SeismicDataProviderPort dataProvider) {
         Objects.requireNonNull(dataProvider, "El proveedor de datos no puede ser nulo");
 

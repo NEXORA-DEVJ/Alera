@@ -36,7 +36,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { AleraCategoryIcon } from '../components/AleraBrand';
 import { api, generateUUID, resolveMediaUrl } from '../services/api';
 import { getRealDeviceLocation } from '../services/location';
-import { triggerLocalProximityAlert, markIncidentAsAlerted } from '../services/notifications';
+import { triggerLocalProximityAlert, markIncidentAsAlerted, incrementUserReportsCount } from '../services/notifications';
 import { IncidentType } from '../types';
 
 interface Props {
@@ -282,6 +282,7 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
 
       if (createdIncident && createdIncident.id) {
         markIncidentAsAlerted(createdIncident.id);
+        incrementUserReportsCount().catch(() => {});
       }
 
       // Actualizar ubicación en Redis para el dispositivo

@@ -2,7 +2,9 @@ package com.alera.seismic.domain.model;
 
 import com.alera.shared.domain.DomainException;
 
-public record Magnitude(double value) {
+import java.io.Serializable;
+
+public record Magnitude(double value) implements Serializable {
 
     public Magnitude {
         if (value < 0.0 || value > 10.0) {

@@ -1,6 +1,8 @@
 package com.alera.shared.domain;
 
-public record Coordinates(double latitude, double longitude) {
+import java.io.Serializable;
+
+public record Coordinates(double latitude, double longitude) implements Serializable {
 
     public Coordinates {
         if (latitude < -90.0 || latitude > 90.0) {

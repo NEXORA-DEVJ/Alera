@@ -36,3 +36,9 @@ build/
 **/target/
 .idea/
 .vscode/
+
+# Firebase and Security Credentials
+*serviceAccountKey*.json
+*firebase-service-account*.json
+google-services.json
+GoogleService-Info.plist

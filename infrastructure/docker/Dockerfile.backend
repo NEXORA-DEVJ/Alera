@@ -1,0 +1,47 @@
+# ==============================================================================
+# ALERA - Dockerfile Multi-Stage para Backend Spring Boot (Java 21)
+# Optimizado para alto rendimiento y despliegue en contenedores (x86 y ARM64)
+# ==============================================================================
+
+# --- ETAPA 1: Construcción y Compilación con Maven ---
+FROM eclipse-temurin:21-jdk-alpine AS builder
+
+WORKDIR /build
+
+# Copiar archivos de Maven Wrapper y dependencias primero para aprovechar cache de capas Docker
+COPY .mvn/ .mvn/
+COPY mvnw pom.xml ./
+
+# Descargar dependencias en una capa cacheada
+RUN chmod +x mvnw && (./mvnw dependency:go-offline -B || true)
+
+# Copiar código fuente y compilar JAR empaquetado
+COPY src/ src/
+RUN ./mvnw clean package -DskipTests -B
+
+# --- ETAPA 2: Runtime Ligero y Seguro ---
+FROM eclipse-temurin:21-jre-alpine AS runner
+
+WORKDIR /app
+
+# Crear usuario sin privilegios para mitigar riesgos de seguridad
+RUN addgroup -S alera && adduser -S alera -G alera
+
+# Variables de entorno predeterminadas
+ENV SPRING_PROFILES_ACTIVE=prod \
+    JAVA_TOOL_OPTIONS="-XX:+UseZGC -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+
+# Copiar artefacto compilado desde la etapa anterior
+COPY --from=builder /build/target/*.jar app.jar
+
+# Crear directorio de subida de archivos multimedia con permisos correctos
+RUN mkdir -p uploads/incidents && chown -R alera:alera /app
+
+USER alera:alera
+
+EXPOSE 8085
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=40s \
+  CMD wget --quiet --tries=1 --spider http://localhost:8085/actuator/health || exit 1
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

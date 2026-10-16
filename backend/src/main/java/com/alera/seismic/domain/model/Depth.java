@@ -2,7 +2,9 @@ package com.alera.seismic.domain.model;
 
 import com.alera.shared.domain.DomainException;
 
-public record Depth(double kilometers) {
+import java.io.Serializable;
+
+public record Depth(double kilometers) implements Serializable {
 
     public Depth{
         if (kilometers < 0.0 || kilometers > 800.0) {
