@@ -8,7 +8,6 @@ import com.alera.devices.domain.port.in.UpdateDeviceLocationUseCase;
 import com.alera.devices.domain.port.out.DeviceLocationRepositoryPort;
 import com.alera.devices.domain.port.out.DeviceRepositoryPort;
 import com.alera.shared.domain.Coordinates;
-import com.alera.shared.domain.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +19,7 @@ import java.util.UUID;
 @Service
 public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocationUseCase {
 
-    private static final long DEFAULT_LOCATION_TTL_SECONDS = 1200L; // 20 minutos
+    private static final long DEFAULT_LOCATION_TTL_SECONDS = 7200; // 2 horas de vigencia de ubicacion efimera
 
     private final DeviceRepositoryPort deviceRepository;
     private final DeviceLocationRepositoryPort locationRepository;
@@ -39,15 +38,44 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
     @Override
     @Transactional
     public Device registerOrUpdate(String fcmToken, Platform platform, UUID userId) {
-        Optional<Device> existingDevice = deviceRepository.findByFcmToken(fcmToken);
+        return registerOrUpdate(null, fcmToken, platform, userId);
+    }
 
+    @Override
+    @Transactional
+    public Device registerOrUpdate(UUID deviceId, String fcmToken, Platform platform, UUID userId) {
+        // 1. Si viene con deviceId explícito, buscarlo para actualizar su token
+        if (deviceId != null) {
+            Optional<Device> byId = deviceRepository.findById(deviceId);
+            if (byId.isPresent()) {
+                Device dev = byId.get();
+                dev.updateToken(fcmToken);
+                return deviceRepository.save(dev);
+            }
+        }
+
+        // 2. Si ya existe un registro con ese fcmToken, actualizarlo
+        Optional<Device> existingDevice = deviceRepository.findByFcmToken(fcmToken);
         if (existingDevice.isPresent()) {
             Device device = existingDevice.get();
             device.updateToken(fcmToken);
             return deviceRepository.save(device);
         }
 
-        Device newDevice = Device.register(fcmToken, platform, userId);
+        // 3. Crear nuevo dispositivo (respetando deviceId si fue provisto)
+        Device newDevice = (deviceId != null)
+                ? Device.reconstitute(
+                        deviceId,
+                        userId,
+                        fcmToken,
+                        platform,
+                        true,
+                        java.time.Instant.now(),
+                        java.time.Instant.now(),
+                        java.time.Instant.now()
+                )
+                : Device.register(fcmToken, platform, userId);
+
         return deviceRepository.save(newDevice);
     }
 
@@ -55,19 +83,16 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
     @Transactional
     public Device updateLocation(UUID deviceId, double latitude, double longitude) {
         Device device = deviceRepository.findById(deviceId)
-                .orElseGet(() -> {
-                    Device autoRegistered = Device.reconstitute(
-                            deviceId,
-                            null,
-                            "DEV_TOKEN_" + deviceId.toString().substring(0, 8),
-                            Platform.IOS,
-                            true,
-                            java.time.Instant.now(),
-                            java.time.Instant.now(),
-                            java.time.Instant.now()
-                    );
-                    return deviceRepository.save(autoRegistered);
-                });
+                .orElseGet(() -> Device.reconstitute(
+                        deviceId,
+                        null,
+                        "DEV_TOKEN_" + deviceId.toString().substring(0, 8),
+                        Platform.ANDROID,
+                        true,
+                        java.time.Instant.now(),
+                        java.time.Instant.now(),
+                        java.time.Instant.now()
+                ));
 
         Coordinates coordinates = new Coordinates(latitude, longitude);
 
@@ -82,23 +107,35 @@ public class DeviceService implements RegisterDeviceUseCase, UpdateDeviceLocatio
     @Transactional(readOnly = true)
     public List<Device> findActiveDevicesNearby(Coordinates center, double radiusKm) {
         List<UUID> nearbyDeviceIds = locationRepository.findDeviceIdsNearby(center, radiusKm);
-
-        return nearbyDeviceIds.stream()
-                .map(deviceRepository::findById)
-                .flatMap(Optional::stream)
-                .filter(Device::isActive)
-                .toList();
+        if (nearbyDeviceIds.isEmpty()) {
+            return List.of();
+        }
+        return deviceRepository.findAllById(nearbyDeviceIds);
     }
 
     @Transactional(readOnly = true)
     public List<NearbyActiveDevice> findActiveDevicesNearbyWithDistance(Coordinates center, double radiusKm) {
-        List<NearbyDeviceLocation> nearby = locationRepository.findNearbyDevicesWithDistance(center, radiusKm);
+        List<NearbyDeviceLocation> geoResults =
+                locationRepository.findNearbyDevicesWithDistance(center, radiusKm);
 
-        return nearby.stream()
-                .map(loc -> deviceRepository.findById(loc.deviceId())
-                        .filter(Device::isActive)
-                        .map(dev -> new NearbyActiveDevice(dev, loc.distanceKm())))
-                .flatMap(Optional::stream)
+        if (geoResults.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> ids = geoResults.stream()
+                .map(NearbyDeviceLocation::deviceId)
+                .toList();
+
+        List<Device> devices = deviceRepository.findAllById(ids);
+        java.util.Map<UUID, Device> deviceMap = devices.stream()
+                .collect(java.util.stream.Collectors.toMap(Device::getId, d -> d));
+
+        return geoResults.stream()
+                .map(r -> {
+                    Device d = deviceMap.get(r.deviceId());
+                    return d != null ? new NearbyActiveDevice(d, r.distanceKm()) : null;
+                })
+                .filter(Objects::nonNull)
                 .toList();
     }
 }

@@ -25,7 +25,7 @@ spring:
       idle-timeout: 300000
       max-lifetime: 1800000
       connection-timeout: 20000
-      leak-detection-threshold: 2000
+      leak-detection-threshold: 60000
 
   cache:
     type: redis
@@ -50,7 +50,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6380}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:alera_redis_password}
       timeout: 2000ms
 
@@ -69,3 +69,5 @@ alera:
   firebase:
     credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
     credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
+  security:
+    admin-key: ${ALERA_ADMIN_KEY:alera_admin_secret_key_2026}

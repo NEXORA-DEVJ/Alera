@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Circle } from 'react-native-maps';
+import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import {
   triggerLocalProximityAlert,
   isIncidentAlerted,
@@ -111,25 +112,28 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
         latitudeDelta: 0.15,
         longitudeDelta: 0.15,
       });
-      await loadNearbyIncidents(loc.latitude, loc.longitude);
+      await loadNearbyIncidents(loc.latitude, loc.longitude, true);
     } else {
       setDetectedCity('Colombia');
-      await loadNearbyIncidents(4.5709, -74.2973);
+      await loadNearbyIncidents(4.5709, -74.2973, false);
     }
   };
 
-  const loadNearbyIncidents = async (lat: number, lon: number) => {
+  const loadNearbyIncidents = async (lat: number, lon: number, hasRealGps: boolean = false) => {
     try {
       setLoading(true);
       const data = await api.getNearbyCommunityIncidents(lat, lon, 50000);
       setIncidents(data || []);
 
       // Verificación de proximidad local: si el usuario está dentro del radio del incidente
-      if (data && data.length > 0) {
+      // Sólo se evalúa si tenemos ubicación GPS real del usuario y el usuario NO es el autor del reporte
+      const currentDevId = deviceId && deviceId.length === 36 ? deviceId : '';
+      if (hasRealGps && data && data.length > 0) {
         const hazard = data.find(
           (inc) =>
             inc.distanceMeters <= inc.incident.radiusMeters &&
             inc.incident.status !== 'RESOLVED' &&
+            inc.incident.reporterDeviceId !== currentDevId &&
             !isIncidentAlerted(inc.incident.id)
         );
 
@@ -172,7 +176,7 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
           : 'Has reportado que la zona ya ha sido despejada o atendida.'
       );
       if (userLocation) {
-        await loadNearbyIncidents(userLocation.latitude, userLocation.longitude);
+        await loadNearbyIncidents(userLocation.latitude, userLocation.longitude, true);
       }
     } catch (err: any) {
       Alert.alert('Información', err.message || 'No se pudo registrar el voto en el servidor.');
@@ -310,52 +314,54 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* 3. MAPA NATIVO CON TOGGLE DE RADIO */}
       <View style={styles.mapSection}>
-        <MapView
-          ref={mapRef}
-          style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude: userLocation ? userLocation.latitude : 4.5709,
-            longitude: userLocation ? userLocation.longitude : -74.2973,
-            latitudeDelta: 0.25,
-            longitudeDelta: 0.25,
-          }}
-          userInterfaceStyle={isDark ? 'dark' : 'light'}
-        >
-          {userLocation && (
-            <Marker coordinate={userLocation} title="Tu Ubicación Real">
-              <View style={styles.userMarkerDot} />
-            </Marker>
-          )}
+        <MapErrorBoundary fallbackMessage="El mapa comunitario requiere servicios de localización activos.">
+          <MapView
+            ref={mapRef}
+            style={StyleSheet.absoluteFill}
+            initialRegion={{
+              latitude: userLocation ? userLocation.latitude : 4.5709,
+              longitude: userLocation ? userLocation.longitude : -74.2973,
+              latitudeDelta: 0.25,
+              longitudeDelta: 0.25,
+            }}
+            userInterfaceStyle={isDark ? 'dark' : 'light'}
+          >
+            {userLocation && (
+              <Marker coordinate={userLocation} title="Tu Ubicación Real">
+                <View style={styles.userMarkerDot} />
+              </Marker>
+            )}
 
-          {filtered.map((item) => (
-            <React.Fragment key={item.incident.id}>
-              {showRadius && (
-                <Circle
-                  center={{
+            {filtered.map((item) => (
+              <React.Fragment key={item.incident.id}>
+                {showRadius && (
+                  <Circle
+                    center={{
+                      latitude: item.incident.latitude,
+                      longitude: item.incident.longitude,
+                    }}
+                    radius={item.incident.radiusMeters || 1000}
+                    fillColor="rgba(240, 106, 53, 0.18)"
+                    strokeColor={colors.seismicAccent}
+                    strokeWidth={1.5}
+                  />
+                )}
+                <Marker
+                  coordinate={{
                     latitude: item.incident.latitude,
                     longitude: item.incident.longitude,
                   }}
-                  radius={item.incident.radiusMeters || 1000}
-                  fillColor="rgba(240, 106, 53, 0.18)"
-                  strokeColor={colors.seismicAccent}
-                  strokeWidth={1.5}
-                />
-              )}
-              <Marker
-                coordinate={{
-                  latitude: item.incident.latitude,
-                  longitude: item.incident.longitude,
-                }}
-                title={getIncidentTypeName(item.incident.incidentType)}
-                description={item.incident.description || ''}
-              >
-                <View style={styles.incidentMarkerBadge}>
-                  {getIncidentIcon(item.incident.incidentType)}
-                </View>
-              </Marker>
-            </React.Fragment>
-          ))}
-        </MapView>
+                  title={getIncidentTypeName(item.incident.incidentType)}
+                  description={item.incident.description || ''}
+                >
+                  <View style={styles.incidentMarkerBadge}>
+                    {getIncidentIcon(item.incident.incidentType)}
+                  </View>
+                </Marker>
+              </React.Fragment>
+            ))}
+          </MapView>
+        </MapErrorBoundary>
 
         {/* Botón flotante para mostrar/ocultar radio */}
         <TouchableOpacity

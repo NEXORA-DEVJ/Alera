@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Circle } from 'react-native-maps';
+import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import {
   ArrowLeft,
   Share2,
@@ -138,29 +139,31 @@ export const SeismicDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       >
         {/* MAPA NATIVO CON EPICENTRO REAL */}
         <View style={styles.mapCard}>
-          <MapView
-            style={StyleSheet.absoluteFill}
-            initialRegion={{
-              latitude: event.latitude,
-              longitude: event.longitude,
-              latitudeDelta: 1.5,
-              longitudeDelta: 1.5,
-            }}
-            userInterfaceStyle={isDark ? 'dark' : 'light'}
-          >
-            <Circle
-              center={{ latitude: event.latitude, longitude: event.longitude }}
-              radius={event.magnitude * 18000}
-              fillColor="rgba(240, 106, 53, 0.18)"
-              strokeColor={colors.seismicAccent}
-              strokeWidth={1.5}
-            />
-            <Marker coordinate={{ latitude: event.latitude, longitude: event.longitude }}>
-              <View style={[styles.markerBadge, { backgroundColor: magColor }]}>
-                <Text style={styles.markerText}>{event.magnitude.toFixed(1)} M</Text>
-              </View>
-            </Marker>
-          </MapView>
+          <MapErrorBoundary fallbackMessage="Epicentro registrado en la Red Sismológica Nacional.">
+            <MapView
+              style={StyleSheet.absoluteFill}
+              initialRegion={{
+                latitude: event.latitude,
+                longitude: event.longitude,
+                latitudeDelta: 1.5,
+                longitudeDelta: 1.5,
+              }}
+              userInterfaceStyle={isDark ? 'dark' : 'light'}
+            >
+              <Circle
+                center={{ latitude: event.latitude, longitude: event.longitude }}
+                radius={event.magnitude * 18000}
+                fillColor="rgba(240, 106, 53, 0.18)"
+                strokeColor={colors.seismicAccent}
+                strokeWidth={1.5}
+              />
+              <Marker coordinate={{ latitude: event.latitude, longitude: event.longitude }}>
+                <View style={[styles.markerBadge, { backgroundColor: magColor }]}>
+                  <Text style={styles.markerText}>{event.magnitude.toFixed(1)} M</Text>
+                </View>
+              </Marker>
+            </MapView>
+          </MapErrorBoundary>
           <View style={styles.epicenterPill}>
             <MapPin size={12} color={colors.seismicAccent} strokeWidth={2} />
             <Text style={styles.epicenterPillText}>Epicentro Registrado</Text>

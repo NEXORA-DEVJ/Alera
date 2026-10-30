@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -94,12 +95,19 @@ public class MediaStorageService {
         return uniqueFilename;
     }
 
+    private static final List<String> ALLOWED_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp");
+
     /**
      * Carga un archivo como Recurso de Spring para ser transmitido por HTTP.
+     * Incluye validación estricta contra ataques de Path Traversal (CWE-22).
      */
     public Resource loadAsResource(String filename) {
         try {
             Path filePath = this.storageDirectory.resolve(filename).normalize();
+            if (!filePath.startsWith(this.storageDirectory)) {
+                log.warn("ALERTA DE SEGURIDAD: Intento de Path Traversal bloqueado para archivo: {}", filename);
+                throw new SecurityException("Acceso no autorizado al sistema de archivos.");
+            }
             Resource resource = new UrlResource(filePath.toUri());
             if (resource.exists() && resource.isReadable()) {
                 return resource;
@@ -114,7 +122,10 @@ public class MediaStorageService {
 
     private String getFileExtension(String filename) {
         if (filename != null && filename.contains(".")) {
-            return filename.substring(filename.lastIndexOf("."));
+            String ext = filename.substring(filename.lastIndexOf(".")).toLowerCase();
+            if (ALLOWED_EXTENSIONS.contains(ext)) {
+                return ext;
+            }
         }
         return ".jpg";
     }

@@ -38,4 +38,9 @@ public class DevicePostgresRepositoryAdapter implements DeviceRepositoryPort {
     public Optional<Device> findByFcmToken(String fcmToken) {
         return jpaRepository.findByFcmToken(fcmToken).map(mapper::toDomain);
     }
+
+    @Override
+    public java.util.List<Device> findAllById(Iterable<UUID> ids) {
+        return jpaRepository.findAllById(ids).stream().map(mapper::toDomain).toList();
+    }
 }

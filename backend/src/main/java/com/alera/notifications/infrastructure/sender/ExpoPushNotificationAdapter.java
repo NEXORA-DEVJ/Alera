@@ -24,7 +24,14 @@ public class ExpoPushNotificationAdapter implements PushNotificationSenderPort {
     private final RestClient restClient;
 
     public ExpoPushNotificationAdapter() {
-        this.restClient = RestClient.builder().build();
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(java.time.Duration.ofSeconds(5));
+        factory.setReadTimeout(java.time.Duration.ofSeconds(10));
+
+        this.restClient = RestClient.builder()
+                .requestFactory(factory)
+                .build();
     }
 
     @Override
@@ -40,6 +47,8 @@ public class ExpoPushNotificationAdapter implements PushNotificationSenderPort {
                 payload.put("body", message.body());
                 payload.put("sound", "default");
                 payload.put("priority", "high");
+                payload.put("channelId", "alera_emergency_channel");
+                payload.put("_displayInForeground", true);
                 payload.put("data", message.data());
 
                 restClient.post()
@@ -49,7 +58,7 @@ public class ExpoPushNotificationAdapter implements PushNotificationSenderPort {
                         .retrieve()
                         .toBodilessEntity();
 
-                log.info("Push enviado via Expo Push Service a: {}", token);
+                log.info("Push enviado via Expo Push Service a: {} [canal: alera_emergency_channel]", token);
                 return NotificationResult.ok(token, "expo_" + UUID.randomUUID().toString().substring(0, 8));
             } catch (Exception ex) {
                 log.error("Fallo al enviar push via Expo: {}", ex.getMessage());

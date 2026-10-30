@@ -177,10 +177,10 @@ export const SeismicListScreen: React.FC<Props> = ({ navigation }) => {
       }
       if (dateFilter === 'WEEK' && eventTime < sevenDaysAgo) return false;
 
-      // 3. Filtro por texto de busqueda
+      // 3. Filtro por texto de busqueda con normalizacion de tildes
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const place = (e.epicenterDescription || '').toLowerCase();
+        const query = (searchQuery || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const place = (e.epicenterDescription || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
         if (!place.includes(query)) return false;
       }
 

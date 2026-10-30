@@ -7,8 +7,8 @@ import {
   SeismicEvent,
 } from '../types';
 
-// IP Wi-Fi de tu computador para conectar tu iPhone directamente al backend
-export const API_BASE_URL = 'http://192.168.10.11:8085/api/v1';
+// Servidor en producción Oracle Cloud (Nginx Gateway puerto 80)
+export const API_BASE_URL = 'http://129.80.177.198/api/v1';
 
 // Generador de UUID v4 estándar RFC4122 compatible con java.util.UUID
 export const generateUUID = (): string => {
@@ -81,6 +81,14 @@ export const api = {
     timestamp: number;
   } | null> => request<any>('/seismic-events/active-emergency'),
 
+  dispatchBackendTestAlert: (): Promise<any> =>
+    request<any>('/seismic-events/test-alert', {
+      method: 'POST',
+      headers: {
+        'X-ALERA-ADMIN-KEY': 'alera_admin_secret_key_2026',
+      },
+    }),
+
   // Incidentes Comunitarios
   getNearbyCommunityIncidents: (
     lat: number,
@@ -118,11 +126,10 @@ export const api = {
   // Dispositivos
   registerDevice: (
     fcmToken: string,
-    platform: 'ANDROID' | 'IOS'
-  ): Promise<{ id: string; fcmToken: string }> =>
+    platform: 'ANDROID' | 'IOS', deviceId?: string): Promise<{ id: string; fcmToken: string }> =>
     request<{ id: string; fcmToken: string }>('/devices', {
       method: 'POST',
-      body: JSON.stringify({ fcmToken, platform }),
+      body: JSON.stringify({ deviceId, fcmToken, platform }),
     }),
 
   updateLocation: (

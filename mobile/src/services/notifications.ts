@@ -7,14 +7,16 @@ import { playEmergencySiren, SirenAlertType } from './sound';
 const PUSH_TOKEN_STORAGE_KEY = '@alera_expo_push_token';
 const DEVICE_STORAGE_KEY = '@alera_device_id';
 
-// Configuracion visual y acustica para notificaciones en primer plano
+// Configuración visual y acústica para notificaciones:
+// En primer plano (app abierta) se suprime el banner tosco del SO / Expo Go para que
+// prevalezca la estética y diseño visual nativo de ALERA (AleraNotificationBanner) con su sirena.
 try {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
+      shouldShowAlert: false, // Ocultar banner genérico del sistema en primer plano (evita logo de Expo Go)
+      shouldPlaySound: false, // La sirena sonora es orquestada directamente por el motor de audio ALERA
       shouldSetBadge: true,
-      shouldShowBanner: true,
+      shouldShowBanner: false,
       shouldShowList: true,
     }),
   });
@@ -58,8 +60,8 @@ export async function setupNotificationChannelsAsync(): Promise<void> {
 }
 
 /**
- * Solicita permisos de notificacion, sincroniza el dispositivo en PostgreSQL
- * y configura los canales de Android.
+ * Solicita permisos de notificacion, obtiene el token push de Firebase/dispositivo,
+ * sincroniza el dispositivo en PostgreSQL y configura los canales de Android.
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   try {
@@ -84,22 +86,40 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     }
 
     let token: string | null = null;
+
+    // 1. Intentar registrar token nativo FCM (Firebase Cloud Messaging)
     try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      token = tokenData.data;
-    } catch {
-      let storedToken = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
-      if (!storedToken) {
-        storedToken = `ExponentPushToken[dev_${generateUUID().substring(0, 16)}]`;
-        await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, storedToken);
+      const deviceToken = await Notifications.getDevicePushTokenAsync();
+      if (deviceToken && deviceToken.data) {
+        token = deviceToken.data;
+        console.log('[ALERA PUSH] Token nativo FCM obtenido con éxito');
       }
-      token = storedToken;
+    } catch (fcmErr) {
+      console.log('[ALERA PUSH] Fallback a Expo Push Token:', fcmErr);
+    }
+
+    // 2. Si no es un build nativo FCM independiente, usar token Expo oficial
+    if (!token) {
+      try {
+        const tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId: '8494b78b-0c8b-4450-86b2-7584d01f94ff',
+        });
+        token = tokenData.data;
+      } catch {
+        let storedToken = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+        if (!storedToken) {
+          storedToken = `ExponentPushToken[dev_${generateUUID().substring(0, 16)}]`;
+          await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, storedToken);
+        }
+        token = storedToken;
+      }
     }
 
     await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
 
     const platform = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
-    const registeredDevice = await api.registerDevice(token, platform);
+    const existingDeviceId = await AsyncStorage.getItem(DEVICE_STORAGE_KEY);
+    const registeredDevice = await api.registerDevice(token, platform, (existingDeviceId && existingDeviceId.length === 36) ? existingDeviceId : undefined);
 
     if (registeredDevice && registeredDevice.id) {
       await AsyncStorage.setItem(DEVICE_STORAGE_KEY, registeredDevice.id);
@@ -140,34 +160,38 @@ export async function triggerLocalProximityAlert(
   body: string,
   enableSiren: boolean = true,
   type: SirenAlertType = 'community',
-  subtitle?: string
+  subtitle?: string,
+  scheduleSystemNotification: boolean = false
 ): Promise<void> {
-  // 1. Despachar banner visual flotante dentro de la app
-  if (bannerCallback) {
-    try {
-      bannerCallback({ title, body, type, subtitle });
-    } catch {
-      // Ignorar
-    }
-  }
-
-  // 2. Despachar notificacion del sistema operativo
   try {
-    const channelId = type === 'seismic' ? 'alera_emergency_channel' : 'alera_community_channel';
+    // 1. Despachar banner visual flotante dentro de la app con estética de marca ALERA
+    if (bannerCallback) {
+      try {
+        bannerCallback({ title, body, type, subtitle });
+      } catch {
+        // Ignorar
+      }
+    }
 
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        subtitle: subtitle || 'Radio de Afectacion Directa',
-        body,
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-        color: '#F06A35',
-        data: { type, isLocalDispatch: true },
-      },
-      trigger: null,
-    });
+    // 2. Solo despachar notificación del sistema operativo si se solicita explícitamente (ej: en background)
+    if (scheduleSystemNotification) {
+      const channelId = type === 'seismic' ? 'alera_emergency_channel' : 'alera_community_channel';
 
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          subtitle: subtitle || 'Radio de Afectacion Directa',
+          body,
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          color: '#F06A35',
+          data: { type, isLocalDispatch: true },
+        },
+        trigger: null,
+      });
+    }
+
+    // 3. Reproducir sirena sonora oficial de ALERA
     if (enableSiren) {
       await playEmergencySiren(type);
     }
@@ -298,4 +322,5 @@ export async function clearAlertHistory(): Promise<void> {
     console.warn('[ALERA] Error al limpiar historial de alertas:', err);
   }
 }
+
 

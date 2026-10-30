@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Circle } from 'react-native-maps';
+import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import {
   Activity,
   Search,
@@ -221,11 +222,27 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     }).length;
   }, [events]);
 
+  const normalizeSearchText = (text: string): string =>
+    (text || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
   const filteredEvents = useMemo(() => {
     const now = Date.now();
+    const query = normalizeSearchText(searchQuery);
+
     return events.filter((e) => {
-      const matchesSearch = e.epicenterDescription.toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
+      // Normalización fonética y de tildes para búsqueda de municipios colombianos
+      if (query.length > 0) {
+        const desc = normalizeSearchText(e.epicenterDescription);
+        if (!desc.includes(query)) {
+          return false;
+        }
+        // Al buscar una ciudad específica, mostrar todas las coincidencias disponibles
+        return true;
+      }
 
       if (timeFilter === 'TODAY') {
         const eventTime = new Date(e.originTime).getTime();
@@ -349,53 +366,55 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* 3. NATIVE MAP CONTAINER */}
       <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude: userCoord ? userCoord.latitude : 4.5709,
-            longitude: userCoord ? userCoord.longitude : -74.2973,
-            latitudeDelta: 6.0,
-            longitudeDelta: 6.0,
-          }}
-          userInterfaceStyle={isDark ? 'dark' : 'light'}
-        >
-          {userCoord && (
-            <Marker coordinate={userCoord} title="Tu Ubicación Real">
-              <View style={styles.userLocationGpsDot} />
-            </Marker>
-          )}
+        <MapErrorBoundary fallbackMessage="El mapa interactivo requiere soporte de servicios de localización. Los sismos recientes se listan abajo.">
+          <MapView
+            ref={mapRef}
+            style={StyleSheet.absoluteFill}
+            initialRegion={{
+              latitude: userCoord ? userCoord.latitude : 4.5709,
+              longitude: userCoord ? userCoord.longitude : -74.2973,
+              latitudeDelta: 6.0,
+              longitudeDelta: 6.0,
+            }}
+            userInterfaceStyle={isDark ? 'dark' : 'light'}
+          >
+            {userCoord && (
+              <Marker coordinate={userCoord} title="Tu Ubicación Real">
+                <View style={styles.userLocationGpsDot} />
+              </Marker>
+            )}
 
-          {filteredEvents.map((e) => {
-            const magColor = getMagnitudeColor(e.magnitude);
+            {filteredEvents.map((e) => {
+              const magColor = getMagnitudeColor(e.magnitude);
 
-            return (
-              <React.Fragment key={e.id}>
-                {/* Radio de Afectación Condicional */}
-                {showRadius && e.magnitude >= 4.0 && (
-                  <Circle
-                    center={{ latitude: e.latitude, longitude: e.longitude }}
-                    radius={e.magnitude * 16000}
-                    fillColor="rgba(240, 106, 53, 0.15)"
-                    strokeColor={colors.seismicAccent}
-                    strokeWidth={1.5}
-                  />
-                )}
-                <Marker
-                  coordinate={{ latitude: e.latitude, longitude: e.longitude }}
-                  onPress={() => {
-                    setSelectedEventId(e.id);
-                    navigation.navigate('SeismicDetail', { event: e });
-                  }}
-                >
-                  <View style={[styles.markerBadge, { backgroundColor: magColor }]}>
-                    <Text style={styles.markerText}>{e.magnitude.toFixed(1)} M</Text>
-                  </View>
-                </Marker>
-              </React.Fragment>
-            );
-          })}
-        </MapView>
+              return (
+                <React.Fragment key={e.id}>
+                  {/* Radio de Afectación Condicional */}
+                  {showRadius && e.magnitude >= 4.0 && (
+                    <Circle
+                      center={{ latitude: e.latitude, longitude: e.longitude }}
+                      radius={e.magnitude * 16000}
+                      fillColor="rgba(240, 106, 53, 0.15)"
+                      strokeColor={colors.seismicAccent}
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  <Marker
+                    coordinate={{ latitude: e.latitude, longitude: e.longitude }}
+                    onPress={() => {
+                      setSelectedEventId(e.id);
+                      navigation.navigate('SeismicDetail', { event: e });
+                    }}
+                  >
+                    <View style={[styles.markerBadge, { backgroundColor: magColor }]}>
+                      <Text style={styles.markerText}>{e.magnitude.toFixed(1)} M</Text>
+                    </View>
+                  </Marker>
+                </React.Fragment>
+              );
+            })}
+          </MapView>
+        </MapErrorBoundary>
 
         {/* Botón flotante: Mostrar / Ocultar Radio de Afectación */}
         <TouchableOpacity

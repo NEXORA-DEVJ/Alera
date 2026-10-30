@@ -52,11 +52,16 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-alera_redis_password}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-alera_redis_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-alera_redis_password}
       ALERA_UPLOAD_DIR: /app/uploads/incidents
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
       FIREBASE_CREDENTIALS_PATH: ${FIREBASE_CREDENTIALS_PATH:-}
-    ports:
-      - "8085:8085"
+    # El puerto 8085 permanece confinado a la red interna; el tráfico exterior ingresa exclusivamente por Nginx (puerto 80)
     depends_on:
       postgres:
         condition: service_healthy

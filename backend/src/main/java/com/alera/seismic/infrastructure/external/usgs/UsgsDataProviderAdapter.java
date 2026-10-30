@@ -30,7 +30,14 @@ public class UsgsDataProviderAdapter implements SeismicDataProviderPort {
     private final RestClient restClient;
 
     public UsgsDataProviderAdapter() {
-        this.restClient = RestClient.builder().build();
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(java.time.Duration.ofSeconds(5));
+        factory.setReadTimeout(java.time.Duration.ofSeconds(10));
+
+        this.restClient = RestClient.builder()
+                .requestFactory(factory)
+                .build();
     }
 
     @Override

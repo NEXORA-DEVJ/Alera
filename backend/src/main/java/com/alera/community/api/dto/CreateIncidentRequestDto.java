@@ -34,8 +34,8 @@ public record CreateIncidentRequestDto(
         @DecimalMax(value = "180.0", message = "La longitud máxima es 180.0")
         Double longitude,
 
-        @Min(value = 50, message = "El radio mínimo de afectación es 50 metros")
-        @Max(value = 100000, message = "El radio máximo de afectación es 100,000 metros (100 km)")
+        @Min(value = 100, message = "El radio mínimo de afectación es 100 metros")
+        @Max(value = 10000, message = "El radio máximo de afectación es 10,000 metros (10 km)")
         Integer radiusMeters,
 
         @NotNull(message = "Debe adjuntar imágenes de evidencia")
@@ -56,6 +56,6 @@ public record CreateIncidentRequestDto(
     }
 
     public int getEffectiveRadius() {
-        return (radiusMeters == null || radiusMeters <= 0) ? 1000 : radiusMeters;
+        return (radiusMeters == null || radiusMeters < 100) ? 1000 : radiusMeters;
     }
 }

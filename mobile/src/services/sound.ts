@@ -27,8 +27,17 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
   isSirenActive = true;
 
   try {
-    // 1. Patron de vibracion haptica extrema de emergencia
-    Vibration.vibrate([0, 800, 200, 800, 200, 1400], true);
+    // 1. Patron de vibracion haptica controlada (sin bucle infinito para no trabar el hardware)
+    if (type === 'community') {
+      // 3 segundos de pulsos controlados sin repeticion infinita
+      Vibration.vibrate([0, 500, 200, 500, 200, 500], false);
+    } else if (type === 'seismic') {
+      // 5 segundos de pulsos intensos controlados sin repeticion infinita
+      Vibration.vibrate([0, 800, 200, 800, 200, 800, 200, 800], false);
+    } else {
+      // Modo prueba: pulso inicial controlado
+      Vibration.vibrate([0, 600, 200, 600, 200, 600], false);
+    }
 
     // 2. Reproduccion acustica con expo-audio
     if (expoAudioModule) {
@@ -43,11 +52,7 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
         try {
           soundSource = require('../../assets/sounds/emergency_siren.mp3');
         } catch {
-          try {
-            soundSource = require('../../assets/sounds/emergency_siren.wav');
-          } catch {
-            soundSource = null;
-          }
+          soundSource = null;
         }
 
         if (soundSource) {

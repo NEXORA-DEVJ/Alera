@@ -12,8 +12,9 @@ WORKDIR /build
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 
-# Descargar dependencias en una capa cacheada
-RUN chmod +x mvnw && (./mvnw dependency:go-offline -B || true)
+ENV MAVEN_OPTS="-Xmx768m -XX:+UseSerialGC"
+
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && (./mvnw dependency:go-offline -B || true)
 
 # Copiar código fuente y compilar JAR empaquetado
 COPY src/ src/
@@ -29,7 +30,7 @@ RUN addgroup -S alera && adduser -S alera -G alera
 
 # Variables de entorno predeterminadas
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_TOOL_OPTIONS="-XX:+UseZGC -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+    JAVA_TOOL_OPTIONS="-Xms256m -Xmx512m -XX:+ExitOnOutOfMemoryError"
 
 # Copiar artefacto compilado desde la etapa anterior
 COPY --from=builder /build/target/*.jar app.jar

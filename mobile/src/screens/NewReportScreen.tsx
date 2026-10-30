@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import MapView, { Marker, Circle } from 'react-native-maps';
+import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import {
   ArrowLeft,
   MapPin,
@@ -285,28 +286,9 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
         incrementUserReportsCount().catch(() => {});
       }
 
-      // Actualizar ubicación en Redis para el dispositivo
-      api.updateLocation(validDeviceId, locationCoord.latitude, locationCoord.longitude).catch(() => {});
-
-      // Formateo estetico de notificacion push con duracion oficial de 3 segundos
-      const typeLabel =
-        selectedType === 'LANDSLIDE' ? 'Derrumbe en vía' :
-        selectedType === 'FIRE' ? 'Incendio activo' :
-        selectedType === 'STRUCTURAL_DAMAGE' ? 'Falla estructural' : 'Vía obstruida';
-
-      const radiusKm = (radiusMeters / 1000).toFixed(1);
-
-      triggerLocalProximityAlert(
-        `ALERTA COMUNITARIA: ${typeLabel}`,
-        `Estás dentro del radio de afectación (${radiusKm} km). ${description.trim()}`,
-        true,
-        'community',
-        `Radio de Afectación: ${radiusKm} km`
-      );
-
       Alert.alert(
         'Alerta Publicada',
-        `El incidente ha sido notificado con éxito a los dispositivos dentro de un radio de ${(radiusMeters / 1000).toFixed(1)} km.`,
+        `El incidente ha sido registrado y notificado a la comunidad en un radio de ${(radiusMeters / 1000).toFixed(1)} km.`,
         [
           {
             text: 'Ver en Mapa',
@@ -381,42 +363,44 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
             )}
 
             <View style={styles.mapCard}>
-              <MapView
-                ref={mapRef}
-                style={StyleSheet.absoluteFill}
-                initialRegion={{
-                  latitude: locationCoord.latitude,
-                  longitude: locationCoord.longitude,
-                  latitudeDelta: 0.02,
-                  longitudeDelta: 0.02,
-                }}
-                userInterfaceStyle={isDark ? 'dark' : 'light'}
-                onPress={(e) => {
-                  const coord = e.nativeEvent.coordinate;
-                  setLocationCoord(coord);
-                }}
-              >
-                <Circle
-                  center={locationCoord}
-                  radius={radiusMeters}
-                  fillColor={colors.gpsBlueFill}
-                  strokeColor={colors.gpsBlue}
-                  strokeWidth={1.5}
-                />
-
-                <Marker
-                  coordinate={locationCoord}
-                  draggable
-                  onDragEnd={(e) => {
+              <MapErrorBoundary fallbackMessage="Toca el botón GPS para centrar coordenadas.">
+                <MapView
+                  ref={mapRef}
+                  style={StyleSheet.absoluteFill}
+                  initialRegion={{
+                    latitude: locationCoord.latitude,
+                    longitude: locationCoord.longitude,
+                    latitudeDelta: 0.02,
+                    longitudeDelta: 0.02,
+                  }}
+                  userInterfaceStyle={isDark ? 'dark' : 'light'}
+                  onPress={(e) => {
                     const coord = e.nativeEvent.coordinate;
                     setLocationCoord(coord);
                   }}
                 >
-                  <View style={styles.customPin}>
-                    <MapPin size={26} color={colors.seismicAccent} strokeWidth={2.5} />
-                  </View>
-                </Marker>
-              </MapView>
+                  <Circle
+                    center={locationCoord}
+                    radius={radiusMeters}
+                    fillColor={colors.gpsBlueFill}
+                    strokeColor={colors.gpsBlue}
+                    strokeWidth={1.5}
+                  />
+
+                  <Marker
+                    coordinate={locationCoord}
+                    draggable
+                    onDragEnd={(e) => {
+                      const coord = e.nativeEvent.coordinate;
+                      setLocationCoord(coord);
+                    }}
+                  >
+                    <View style={styles.customPin}>
+                      <MapPin size={26} color={colors.seismicAccent} strokeWidth={2.5} />
+                    </View>
+                  </Marker>
+                </MapView>
+              </MapErrorBoundary>
 
               <TouchableOpacity
                 style={styles.gpsButtonFloating}

@@ -59,7 +59,8 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
         log.info("Nuevo incidente comunitario registrado: ID {}, Tipo {}, Radio {}m con {} imagenes",
                 saved.getId(), saved.getIncidentType(), saved.getRadiusMeters(), images.size());
 
-        notifyNearbyDevices(saved);
+        // Despacho asíncrono para liberar inmediatamente la conexión del pool de base de datos
+        java.util.concurrent.CompletableFuture.runAsync(() -> notifyNearbyDevices(saved));
 
         return saved;
     }
@@ -108,6 +109,12 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
                     incident.getId(), radiusKm, nearby.size());
 
             for (DeviceService.NearbyActiveDevice target : nearby) {
+                if (incident.getReporterDeviceId() != null &&
+                        incident.getReporterDeviceId().equals(target.device().getId())) {
+                    log.info("Omitiendo notificación push para el dispositivo reportero creador: {}", incident.getReporterDeviceId());
+                    continue;
+                }
+
                 String typeName = switch (incident.getIncidentType()) {
                     case LANDSLIDE -> "Derrumbe en vía";
                     case FIRE -> "Incendio activo";

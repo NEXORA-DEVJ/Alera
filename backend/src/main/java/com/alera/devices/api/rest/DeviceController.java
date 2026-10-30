@@ -38,6 +38,7 @@ public class DeviceController {
             @Valid @RequestBody RegisterDeviceRequestDto request) {
 
         Device device = registerDeviceUseCase.registerOrUpdate(
+                request.deviceId(),
                 request.fcmToken(),
                 request.toPlatform(),
                 request.userId()
@@ -60,12 +61,5 @@ public class DeviceController {
         );
 
         return ResponseEntity.ok(ApiResponse.ok(DeviceResponseDto.fromDomain(device)));
-    }
-
-    @PostMapping("/{id}/location")
-    public ResponseEntity<ApiResponse<DeviceResponseDto>> updateLocationPost(
-            @PathVariable("id") UUID id,
-            @Valid @RequestBody UpdateDeviceLocationRequestDto request) {
-        return updateLocation(id, request);
     }
 }

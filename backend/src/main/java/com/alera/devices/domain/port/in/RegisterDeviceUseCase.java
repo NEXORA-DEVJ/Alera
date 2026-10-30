@@ -8,4 +8,6 @@ import java.util.UUID;
 public interface RegisterDeviceUseCase {
 
     Device registerOrUpdate(String fcmToken, Platform platform, UUID userId);
+
+    Device registerOrUpdate(UUID deviceId, String fcmToken, Platform platform, UUID userId);
 }

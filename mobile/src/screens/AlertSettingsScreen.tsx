@@ -13,7 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, Circle } from 'react-native-maps';
+import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import { playEmergencySiren, stopEmergencySiren } from '../services/sound';
+import { api } from '../services/api';
 import {
   ArrowLeft,
   Volume2,
@@ -55,6 +57,7 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
 
   // Estado de prueba de alarma activa
   const [isTestingAlarm, setIsTestingAlarm] = useState<boolean>(false);
+  const [isSendingPushTest, setIsSendingPushTest] = useState<boolean>(false);
 
   // GPS Real
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -64,6 +67,25 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
   const stopAlarm = async () => {
     await stopEmergencySiren();
     setIsTestingAlarm(false);
+  };
+
+  const handleTestPushNotification = async () => {
+    setIsSendingPushTest(true);
+    try {
+      await api.dispatchBackendTestAlert();
+      Alert.alert(
+        'Simulacro Despachado por Red',
+        'El backend envió la señal de emergencia vía Firebase FCM a tu dispositivo.\n\nSi estás dentro de la app verás el banner ALERA con sirena; si estás fuera de la app recibirás la notificación push nativa.',
+        [{ text: 'Entendido' }]
+      );
+    } catch {
+      Alert.alert(
+        'Error de Conexión',
+        'No se pudo conectar con el servidor de ALERA para emitir el simulacro push.'
+      );
+    } finally {
+      setIsSendingPushTest(false);
+    }
   };
 
   useEffect(() => {
@@ -215,31 +237,33 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.sectionBlock}>
           <Text style={styles.sectionHeaderTitle}>RADIO DE COBERTURA ESPACIAL</Text>
           <View style={styles.mapCard}>
-            <MapView
-              style={StyleSheet.absoluteFill}
-              region={{
-                latitude: userLocation ? userLocation.latitude : 4.5709,
-                longitude: userLocation ? userLocation.longitude : -74.2973,
-                latitudeDelta: coverageRadiusKm > 100 ? 3.5 : 1.8,
-                longitudeDelta: coverageRadiusKm > 100 ? 3.5 : 1.8,
-              }}
-              userInterfaceStyle={isDark ? 'dark' : 'light'}
-            >
-              {userLocation && (
-                <>
-                  <Circle
-                    center={userLocation}
-                    radius={coverageRadiusKm * 1000}
-                    fillColor={colors.gpsBlueFill}
-                    strokeColor={colors.gpsBlue}
-                    strokeWidth={1.5}
-                  />
-                  <Marker coordinate={userLocation}>
-                    <View style={styles.userMarkerDot} />
-                  </Marker>
-                </>
-              )}
-            </MapView>
+            <MapErrorBoundary fallbackMessage="Radio de cobertura configurado correctamente.">
+              <MapView
+                style={StyleSheet.absoluteFill}
+                region={{
+                  latitude: userLocation ? userLocation.latitude : 4.5709,
+                  longitude: userLocation ? userLocation.longitude : -74.2973,
+                  latitudeDelta: coverageRadiusKm > 100 ? 3.5 : 1.8,
+                  longitudeDelta: coverageRadiusKm > 100 ? 3.5 : 1.8,
+                }}
+                userInterfaceStyle={isDark ? 'dark' : 'light'}
+              >
+                {userLocation && (
+                  <>
+                    <Circle
+                      center={userLocation}
+                      radius={coverageRadiusKm * 1000}
+                      fillColor={colors.gpsBlueFill}
+                      strokeColor={colors.gpsBlue}
+                      strokeWidth={1.5}
+                    />
+                    <Marker coordinate={userLocation}>
+                      <View style={styles.userMarkerDot} />
+                    </Marker>
+                  </>
+                )}
+              </MapView>
+            </MapErrorBoundary>
             <View style={styles.baseLocationTag}>
               <MapPin size={12} color={colors.gpsBlue} strokeWidth={2} />
               <Text style={styles.baseLocationText}>
@@ -387,6 +411,26 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.testAlertBtnText}>PROBAR ALARMA SÍSMICA AHORA</Text>
                 </>
               )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.testAlertBtn,
+                {
+                  marginTop: 10,
+                  backgroundColor: colors.surfaceCard,
+                  borderColor: colors.seismicAccent,
+                  borderWidth: 1,
+                },
+              ]}
+              onPress={handleTestPushNotification}
+              disabled={isSendingPushTest}
+              activeOpacity={0.8}
+            >
+              <Radio size={16} color={colors.seismicAccent} strokeWidth={2} />
+              <Text style={[styles.testAlertBtnText, { color: colors.seismicAccent, marginLeft: 8 }]}>
+                {isSendingPushTest ? 'ENVIANDO A DISPOSITIVO...' : 'DESPACHAR PRUEBA PUSH REAL (FCM)'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

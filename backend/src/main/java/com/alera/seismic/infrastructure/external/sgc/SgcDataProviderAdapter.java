@@ -32,7 +32,13 @@ public class SgcDataProviderAdapter implements SeismicDataProviderPort {
     private final RestClient restClient;
 
     public SgcDataProviderAdapter() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(java.time.Duration.ofSeconds(5));
+        factory.setReadTimeout(java.time.Duration.ofSeconds(10));
+
         this.restClient = RestClient.builder()
+                .requestFactory(factory)
                 .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                 .defaultHeader("Referer", "https://www.sgc.gov.co/")
                 .defaultHeader("Origin", "https://www.sgc.gov.co")

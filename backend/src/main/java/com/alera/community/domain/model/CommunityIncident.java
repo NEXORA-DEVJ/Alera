@@ -46,7 +46,12 @@ public class CommunityIncident {
                               Instant createdAt,
                               Instant updatedAt) {
         validateInvariants(radiusMeters);
-        validateImages(imageUrls);
+        if (description != null && description.length() > 500) {
+            throw new DomainException("La descripción del incidente no puede superar los 500 caracteres.");
+        }
+        if (imageUrls != null && imageUrls.size() > 4) {
+            throw new DomainException("Un incidente no puede contener más de 4 imágenes de evidencia.");
+        }
         this.id = Objects.requireNonNull(id, "El ID del incidente no puede ser nulo");
         this.reporterDeviceId = Objects.requireNonNull(reporterDeviceId, "El reporterDeviceId no puede ser nulo");
         this.incidentType = Objects.requireNonNull(incidentType, "El tipo de incidente no puede ser nulo");
@@ -69,6 +74,7 @@ public class CommunityIncident {
                                           Coordinates coordinates,
                                           int radiusMeters,
                                           List<String> images) {
+        validateImages(images);
         Instant now = Instant.now();
         Instant expires = now.plus(DEFAULT_DURATION);
         int safeRadius = (radiusMeters <= 0) ? 1000 : radiusMeters;

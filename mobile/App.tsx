@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -8,11 +8,8 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import {
   registerForPushNotificationsAsync,
   triggerLocalProximityAlert,
-  isIncidentAlerted,
-  markIncidentAsAlerted,
 } from './src/services/notifications';
-import { api } from './src/services/api';
-import { playEmergencySiren } from './src/services/sound';
+import { SirenAlertType, stopEmergencySiren } from './src/services/sound';
 import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateUUID } from './src/services/api';
@@ -30,7 +27,7 @@ function MainApp() {
       startContinuousLocationTracking(devId);
     });
 
-    // 1. Escuchador de notificaciones push del sistema operativo
+    // Escuchador reactivo de notificaciones push (Firebase Cloud Messaging / Expo)
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
       const content = notification.request.content;
       const data = (content.data || {}) as Record<string, any>;
@@ -40,67 +37,33 @@ function MainApp() {
         return;
       }
 
-      const title = (content.title || '').toUpperCase();
+      const rawTitle = content.title || 'ALERTA SÍSMICA ALERA';
+      const body = content.body || '';
+      const titleUpper = rawTitle.toUpperCase();
 
-      if (title.includes('SISMO') || title.includes('TERREMOTO') || data.type === 'seismic') {
-        // Alerta Sismica: reproduccion oficial de 5 segundos
-        playEmergencySiren('seismic');
-      } else if (title.includes('ALERTA') || title.includes('COMUNITARIA') || data.type === 'community') {
-        // Alerta Comunitaria: reproduccion oficial de 3 segundos
-        playEmergencySiren('community');
+      const type: SirenAlertType =
+        (titleUpper.includes('SISMO') || titleUpper.includes('TERREMOTO') || data.type === 'seismic')
+          ? 'seismic'
+          : 'community';
+
+      const subtitle = data.magnitude ? `Magnitud: M ${data.magnitude}` : undefined;
+
+      // Desplegar banner visual flotante de ALERA con sirena acústica oficial
+      triggerLocalProximityAlert(rawTitle, body, true, type, subtitle, false);
+    });
+
+    // Cancelar sirenas o vibraciones si el usuario sale o minimiza la app
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState !== 'active') {
+        stopEmergencySiren();
       }
     });
 
-    // 2. Sincronizacion activa en tiempo real de emergencias y simulacros desde el backend
-    let lastProcessedEmergencyTime = 0;
-
-    const checkActiveEmergency = async () => {
-      try {
-        const emergency = await api.getActiveEmergencyAlert();
-        if (emergency && emergency.id) {
-          const isDrillOrTest =
-            (emergency.title && emergency.title.toUpperCase().includes('SIMULACRO')) ||
-            (emergency.title && emergency.title.toUpperCase().includes('PRUEBA')) ||
-            (emergency.id && emergency.id.toLowerCase().includes('test'));
-
-          const eventTimestamp = emergency.timestamp || Date.now();
-
-          // Para simulacros: permitir repeticion de prueba si es una emision reciente (menos de 30 segundos)
-          if (isDrillOrTest) {
-            if (eventTimestamp > lastProcessedEmergencyTime && (Date.now() - eventTimestamp < 30000)) {
-              lastProcessedEmergencyTime = eventTimestamp;
-              const subtitle = emergency.magnitude ? `Magnitud: M ${emergency.magnitude}` : undefined;
-              await triggerLocalProximityAlert(
-                emergency.title,
-                emergency.body,
-                true,
-                emergency.type || 'seismic',
-                subtitle
-              );
-            }
-          } else if (!isIncidentAlerted(emergency.id)) {
-            markIncidentAsAlerted(emergency.id);
-            const subtitle = emergency.magnitude ? `Magnitud: M ${emergency.magnitude}` : undefined;
-            await triggerLocalProximityAlert(
-              emergency.title,
-              emergency.body,
-              true,
-              emergency.type || 'seismic',
-              subtitle
-            );
-          }
-        }
-      } catch {
-        // Si el backend no esta respondiendo temporalmente, omitir
-      }
-    };
-
-    const emergencyInterval = setInterval(checkActiveEmergency, 2000);
-
     return () => {
       subscription.remove();
-      clearInterval(emergencyInterval);
+      appStateSubscription.remove();
       stopContinuousLocationTracking();
+      stopEmergencySiren();
     };
   }, []);
 

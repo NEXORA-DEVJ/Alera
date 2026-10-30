@@ -29,6 +29,9 @@ public class SeismicAlertController {
     private final PushNotificationSenderPort notificationSender;
     private final DeviceSpringDataJpaRepository deviceRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${alera.security.admin-key:alera_admin_secret_key_2026}")
+    private String configuredAdminKey;
+
     public SeismicAlertController(DispatchSeismicAlertsUseCase dispatchAlertsUseCase,
                                   PushNotificationSenderPort notificationSender,
                                   DeviceSpringDataJpaRepository deviceRepository) {
@@ -37,17 +40,29 @@ public class SeismicAlertController {
         this.deviceRepository = Objects.requireNonNull(deviceRepository, "DeviceSpringDataJpaRepository no puede ser nulo");
     }
 
+    private void verifyAdminKey(String requestKey) {
+        if (configuredAdminKey == null || configuredAdminKey.isBlank()) {
+            return;
+        }
+        if (requestKey == null || !requestKey.trim().equals(configuredAdminKey.trim())) {
+            throw new SecurityException("Acceso no autorizado: Cabecera 'X-ALERA-ADMIN-KEY' ausente o invalida.");
+        }
+    }
+
     @PostMapping("/{id}/dispatch-alerts")
     public ResponseEntity<ApiResponse<DispatchAlertsResponseDto>> dispatchAlerts(
-            @PathVariable("id") UUID id) {
-
+            @PathVariable("id") UUID id,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-ALERA-ADMIN-KEY", required = false) String adminKey) {
+        verifyAdminKey(adminKey);
         SeismicAlertDispatchResult result = dispatchAlertsUseCase.dispatchForEvent(id);
 
         return ResponseEntity.ok(ApiResponse.ok(DispatchAlertsResponseDto.fromResult(result)));
     }
 
     @PostMapping("/test-alert")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> dispatchTestAlert() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> dispatchTestAlert(
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-ALERA-ADMIN-KEY", required = false) String adminKey) {
+        verifyAdminKey(adminKey);
         long now = System.currentTimeMillis();
         String alertId = "test-seismic-" + now;
 

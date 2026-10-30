@@ -10,7 +10,10 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.UUID;
 
-@Component
+/**
+ * @deprecated Obsoleto. La simulación y fallback están completamente integrados en FcmPushNotificationAdapter.
+ */
+@Deprecated
 public class SimulatedPushNotificationAdapter implements PushNotificationSenderPort {
 
     private static final Logger log = LoggerFactory.getLogger(SimulatedPushNotificationAdapter.class);

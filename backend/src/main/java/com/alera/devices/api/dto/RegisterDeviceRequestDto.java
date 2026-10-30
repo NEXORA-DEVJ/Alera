@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
 
 public record RegisterDeviceRequestDto(
+        UUID deviceId,
+
         @NotBlank(message = "El token FCM es obligatorio")
         String fcmToken,
 

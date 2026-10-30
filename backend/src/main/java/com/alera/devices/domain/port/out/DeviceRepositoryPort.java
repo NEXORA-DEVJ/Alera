@@ -2,6 +2,7 @@ package com.alera.devices.domain.port.out;
 
 import com.alera.devices.domain.model.Device;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,4 +13,6 @@ public interface DeviceRepositoryPort {
     Optional<Device> findById(UUID id);
 
     Optional<Device> findByFcmToken(String fcmToken);
+
+    List<Device> findAllById(Iterable<UUID> ids);
 }
