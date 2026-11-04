@@ -198,7 +198,7 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
       transform: translate(-50%, -50%);
     }
 
-    /* Pin arrastrable tipo InDriver */
+    /* Pin arrastrable */
     .draggable-pin {
       width: 32px;
       height: 32px;

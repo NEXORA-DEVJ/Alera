@@ -331,7 +331,7 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
         >
           {/* PASO 1: MAPA NATIVO Y BUSCADOR TIPO INDRIVER */}
           <View style={styles.stepSection}>
-            <Text style={styles.stepLabel}>1. UBICACIÓN DEL INCIDENTE (TIPO INDRIVER)</Text>
+            <Text style={styles.stepLabel}>1. UBICACIÓN DEL INCIDENTE</Text>
 
             <View style={styles.searchBarContainer}>
               <Search size={16} color={colors.textMuted} strokeWidth={1.8} />
