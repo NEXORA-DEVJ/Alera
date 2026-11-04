@@ -745,6 +745,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     mapContainer: {
       flex: 1,
+      minHeight: 320,
       marginHorizontal: 20,
       borderRadius: 14,
       overflow: 'hidden',

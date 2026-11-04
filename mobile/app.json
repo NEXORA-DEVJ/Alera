@@ -34,6 +34,7 @@
     },
     "plugins": [
       "./plugins/withCleartextTraffic.js",
+      "./plugins/withDisableMinify.js",
       "expo-audio",
       [
         "expo-location",

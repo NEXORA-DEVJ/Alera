@@ -34,13 +34,11 @@ export async function setupNotificationChannelsAsync(): Promise<void> {
       await Notifications.setNotificationChannelAsync('alera_emergency_channel', {
         name: 'Alertas Criticas ALERA',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 800, 200, 800, 200, 1400],
+        vibrationPattern: [0, 800, 200, 800],
         lightColor: '#F06A35',
         enableLights: true,
         enableVibrate: true,
-        sound: 'default',
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
       });
 
       await Notifications.setNotificationChannelAsync('alera_community_channel', {
@@ -50,11 +48,10 @@ export async function setupNotificationChannelsAsync(): Promise<void> {
         lightColor: '#F06A35',
         enableLights: true,
         enableVibrate: true,
-        sound: 'default',
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
     } catch (err) {
-      console.warn('[ALERA PUSH] No se pudieron configurar canales de notificacion:', err);
+      console.warn('[ALERA PUSH] Canales de notificacion:', err);
     }
   }
 }
