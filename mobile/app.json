@@ -12,26 +12,14 @@
     },
     "android": {
       "package": "com.alera.app",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDummyKeyForGoogleMapsALERAPlatform"
-        }
-      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
         "VIBRATE",
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0D10",
@@ -50,7 +38,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "ALERA requiere tu ubicación en segundo plano para alertarte de forma inmediata si ocurre un sismo o terremoto en tu zona."
+          "locationAlwaysAndWhenInUsePermission": "ALERA requiere tu ubicación para alertarte de forma inmediata si ocurre un sismo o terremoto en tu zona.",
+          "isAndroidBackgroundLocationEnabled": false
         }
       ],
       [

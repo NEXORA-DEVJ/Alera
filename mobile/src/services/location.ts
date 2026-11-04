@@ -60,20 +60,14 @@ let locationSubscription: Location.LocationSubscription | null = null;
 
 /**
  * Inicia el rastreo continuo de ubicacion para que el backend siempre
- * conozca las coordenadas del usuario ante sismos o alertas comunitarias,
- * incluso al navegar en otras pantallas o con la app en segundo plano.
+ * conozca las coordenadas del usuario ante sismos o alertas comunitarias
+ * mientras la aplicacion esta activa.
  */
 export const startContinuousLocationTracking = async (deviceId: string): Promise<boolean> => {
   try {
     const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
     if (fgStatus !== 'granted') {
       return false;
-    }
-
-    try {
-      await Location.requestBackgroundPermissionsAsync();
-    } catch {
-      // Ignorar si no esta soportado en el entorno
     }
 
     if (locationSubscription) {
@@ -105,4 +99,4 @@ export const stopContinuousLocationTracking = (): void => {
     locationSubscription.remove();
     locationSubscription = null;
   }
-};
+};

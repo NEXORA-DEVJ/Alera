@@ -87,32 +87,27 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     let token: string | null = null;
 
-    // 1. Intentar registrar token nativo FCM (Firebase Cloud Messaging)
+    // 1. Obtención segura del Expo Push Token con fallback automático
+    // Evita llamar a getDevicePushTokenAsync en Android sin google-services.json
+    // para prevenir IllegalStateException en Firebase nativo.
     try {
-      const deviceToken = await Notifications.getDevicePushTokenAsync();
-      if (deviceToken && deviceToken.data) {
-        token = deviceToken.data;
-        console.log('[ALERA PUSH] Token nativo FCM obtenido con éxito');
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: '8494b78b-0c8b-4450-86b2-7584d01f94ff',
+      });
+      if (tokenData && tokenData.data) {
+        token = tokenData.data;
       }
-    } catch (fcmErr) {
-      console.log('[ALERA PUSH] Fallback a Expo Push Token:', fcmErr);
+    } catch (pushErr) {
+      console.log('[ALERA PUSH] Expo Push Token diferido, empleando token local:', pushErr);
     }
 
-    // 2. Si no es un build nativo FCM independiente, usar token Expo oficial
     if (!token) {
-      try {
-        const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: '8494b78b-0c8b-4450-86b2-7584d01f94ff',
-        });
-        token = tokenData.data;
-      } catch {
-        let storedToken = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
-        if (!storedToken) {
-          storedToken = `ExponentPushToken[dev_${generateUUID().substring(0, 16)}]`;
-          await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, storedToken);
-        }
-        token = storedToken;
+      let storedToken = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+      if (!storedToken) {
+        storedToken = `ExponentPushToken[dev_${generateUUID().substring(0, 16)}]`;
+        await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, storedToken);
       }
+      token = storedToken;
     }
 
     await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);

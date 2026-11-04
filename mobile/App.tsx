@@ -5,6 +5,7 @@ import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { AleraNotificationBanner } from './src/components/AleraNotificationBanner';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { RootErrorBoundary } from './src/components/RootErrorBoundary';
 import {
   registerForPushNotificationsAsync,
   triggerLocalProximityAlert,
@@ -19,40 +20,54 @@ function MainApp() {
   const { colors, isDark } = useTheme();
 
   useEffect(() => {
-    registerForPushNotificationsAsync();
-
-    // Iniciar rastreo continuo de coordenadas para el backend
-    AsyncStorage.getItem('@alera_device_id').then((id) => {
-      const devId = id && id.length === 36 ? id : generateUUID();
-      startContinuousLocationTracking(devId);
+    // 1. Registro seguro de notificaciones push
+    registerForPushNotificationsAsync().catch((err) => {
+      console.warn('[ALERA] Error en registro de notificaciones:', err);
     });
 
-    // Escuchador reactivo de notificaciones push (Firebase Cloud Messaging / Expo)
-    const subscription = Notifications.addNotificationReceivedListener((notification) => {
-      const content = notification.request.content;
-      const data = (content.data || {}) as Record<string, any>;
+    // 2. Iniciar rastreo seguro de coordenadas para el backend
+    AsyncStorage.getItem('@alera_device_id')
+      .then((id) => {
+        const devId = id && id.length === 36 ? id : generateUUID();
+        return startContinuousLocationTracking(devId);
+      })
+      .catch((err) => {
+        console.warn('[ALERA] Error en inicializacion de GPS:', err);
+      });
 
-      // Si la alerta fue emitida localmente dentro de la app, su sirena ya fue orquestada
-      if (data.isLocalDispatch) {
-        return;
-      }
+    // 3. Escuchador reactivo de notificaciones push
+    let subscription: Notifications.Subscription | null = null;
+    try {
+      subscription = Notifications.addNotificationReceivedListener((notification) => {
+        try {
+          const content = notification.request.content;
+          const data = (content.data || {}) as Record<string, any>;
 
-      const rawTitle = content.title || 'ALERTA SÍSMICA ALERA';
-      const body = content.body || '';
-      const titleUpper = rawTitle.toUpperCase();
+          if (data.isLocalDispatch) {
+            return;
+          }
 
-      const type: SirenAlertType =
-        (titleUpper.includes('SISMO') || titleUpper.includes('TERREMOTO') || data.type === 'seismic')
-          ? 'seismic'
-          : 'community';
+          const rawTitle = content.title || 'ALERTA SÍSMICA ALERA';
+          const body = content.body || '';
+          const titleUpper = rawTitle.toUpperCase();
 
-      const subtitle = data.magnitude ? `Magnitud: M ${data.magnitude}` : undefined;
+          const type: SirenAlertType =
+            (titleUpper.includes('SISMO') || titleUpper.includes('TERREMOTO') || data.type === 'seismic')
+              ? 'seismic'
+              : 'community';
 
-      // Desplegar banner visual flotante de ALERA con sirena acústica oficial
-      triggerLocalProximityAlert(rawTitle, body, true, type, subtitle, false);
-    });
+          const subtitle = data.magnitude ? `Magnitud: M ${data.magnitude}` : undefined;
 
-    // Cancelar sirenas o vibraciones si el usuario sale o minimiza la app
+          triggerLocalProximityAlert(rawTitle, body, true, type, subtitle, false);
+        } catch (listenerErr) {
+          console.warn('[ALERA] Error procesando notificación push entrante:', listenerErr);
+        }
+      });
+    } catch (subErr) {
+      console.warn('[ALERA] No se pudo inicializar listener de notificaciones:', subErr);
+    }
+
+    // 4. Cancelar sirenas o vibraciones si el usuario sale o minimiza la app
     const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState !== 'active') {
         stopEmergencySiren();
@@ -60,7 +75,7 @@ function MainApp() {
     });
 
     return () => {
-      subscription.remove();
+      subscription?.remove();
       appStateSubscription.remove();
       stopContinuousLocationTracking();
       stopEmergencySiren();
@@ -90,10 +105,12 @@ function MainApp() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <MainApp />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <RootErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <MainApp />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </RootErrorBoundary>
   );
 }
