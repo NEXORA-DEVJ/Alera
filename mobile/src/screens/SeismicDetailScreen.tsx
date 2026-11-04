@@ -49,7 +49,7 @@ export const SeismicDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   if (!event) {
     return (
       <View style={[styles.emptyContainer, { paddingTop: Math.max(insets.top, 20) }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.backgroundPrimary} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <Text style={styles.emptyTitle}>Sismo no seleccionado</Text>
         <Text style={styles.emptySubtitle}>
           Selecciona un sismo real desde el mapa para consultar su ficha técnica.
@@ -108,7 +108,7 @@ export const SeismicDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.backgroundPrimary} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* TOP APP BAR */}
       <View style={styles.topBar}>

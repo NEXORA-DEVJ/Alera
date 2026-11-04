@@ -77,7 +77,7 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
     },
     ref
   ) => {
-    const webViewRef = useRef<WebView>(null);
+    const webViewRef = useRef<any>(null);
 
     useImperativeHandle(ref, () => ({
       animateToRegion: (targetRegion: MapRegion) => {
@@ -377,7 +377,7 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
           mixedContentMode="always"
           allowsInlineMediaPlayback={true}
           onMessage={handleWebViewMessage}
-          onError={(e) => console.warn('[AleraInteractiveMap WebView Error]:', e.nativeEvent)}
+          onError={(e: any) => console.warn('[AleraInteractiveMap WebView Error]:', e.nativeEvent)}
         />
       </View>
     );

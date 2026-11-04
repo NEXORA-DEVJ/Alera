@@ -309,7 +309,7 @@ export const NewReportScreen: React.FC<Props> = ({ navigation }) => {
       style={styles.keyboardContainer}
     >
       <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.backgroundPrimary} />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
         {/* TOP BAR */}
         <View style={styles.topBar}>

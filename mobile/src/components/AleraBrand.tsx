@@ -117,6 +117,8 @@ export type AleraCategoryType =
   | 'STRUCTURAL_DAMAGE'
   | 'ROAD_BLOCK'
   | 'ACCIDENT'
+  | 'SEISMIC'
+  | 'SISMO'
   | 'GPS';
 
 export const AleraCategoryIcon: React.FC<{
@@ -125,6 +127,23 @@ export const AleraCategoryIcon: React.FC<{
   color?: string;
 }> = ({ type, size = 22, color = '#F06A35' }) => {
   switch (type) {
+    case 'SEISMIC':
+    case 'SISMO':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" opacity={0.3} />
+          <Circle cx="12" cy="12" r="5" stroke={color} strokeWidth="1.8" opacity={0.6} />
+          <Circle cx="12" cy="12" r="2.5" fill={color} />
+          <Path
+            d="M3 12 L6 12 L8 8 L11 16 L13 9 L15 14 L17 11 L19 12 L21 12"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      );
+
     case 'LANDSLIDE':
     case 'DERRUMBES':
       return (
@@ -178,16 +197,39 @@ export const AleraCategoryIcon: React.FC<{
         </Svg>
       );
 
-    case 'ROAD_BLOCK':
     case 'ACCIDENT':
     case 'ACCIDENTES':
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-          {/* Barrera de obra / accidente */}
+          {/* Silueta de vehiculo con impacto */}
+          <Path
+            d="M5 15 L6.5 10 L17.5 10 L19 15 Z"
+            stroke={color}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+          <Rect x="4" y="14" width="16" height="5" rx="1.5" stroke={color} strokeWidth="1.8" />
+          <Circle cx="7.5" cy="17" r="1.2" fill={color} />
+          <Circle cx="16.5" cy="17" r="1.2" fill={color} />
+          {/* Destello de colision */}
+          <Path
+            d="M12 2 L13.5 5.5 L17 4 L14.5 7.5 L18 9 L13.5 9.5"
+            stroke={color}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill={color}
+          />
+        </Svg>
+      );
+
+    case 'ROAD_BLOCK':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          {/* Barrera de via cerrada */}
           <Rect x="3" y="6" width="18" height="8" rx="1.5" stroke={color} strokeWidth="2" />
           <Line x1="7" y1="6" x2="11" y2="14" stroke={color} strokeWidth="2" />
           <Line x1="13" y1="6" x2="17" y2="14" stroke={color} strokeWidth="2" />
-          {/* Patas de la barrera */}
           <Line x1="6" y1="14" x2="5" y2="20" stroke={color} strokeWidth="2" strokeLinecap="round" />
           <Line x1="18" y1="14" x2="19" y2="20" stroke={color} strokeWidth="2" strokeLinecap="round" />
         </Svg>
@@ -216,11 +258,12 @@ export const AleraCategoryIcon: React.FC<{
  * - Perfil con pulso
  */
 export const AleraNavIcon: React.FC<{
-  tab: 'Mapa' | 'Alertas' | 'Comunidad' | 'Perfil';
+  tab: 'Sismos' | 'Mapa' | 'AlertasComunitarias' | 'Comunidad' | 'Alertas' | 'Perfil';
   color: string;
   size?: number;
 }> = ({ tab, color, size = 22 }) => {
   switch (tab) {
+    case 'Sismos':
     case 'Mapa':
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -262,6 +305,7 @@ export const AleraNavIcon: React.FC<{
         </Svg>
       );
 
+    case 'AlertasComunitarias':
     case 'Comunidad':
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

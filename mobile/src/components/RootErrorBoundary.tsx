@@ -32,7 +32,7 @@ export class RootErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <View style={styles.container}>
-          <StatusBar barStyle="light-content" backgroundColor="#0D0F12" />
+          <StatusBar barStyle="light-content" />
           <View style={styles.card}>
             <Text style={styles.logo}>ALERA</Text>
             <Text style={styles.title}>Reanudando Sistema</Text>

@@ -137,11 +137,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   }
 }
 
-type BannerCallback = (alert: {
+export type BannerCallback = (alert: {
   title: string;
   body: string;
   type: SirenAlertType;
   subtitle?: string;
+  category?: string;
 }) => void;
 
 let bannerCallback: BannerCallback | null = null;
@@ -165,13 +166,32 @@ export async function triggerLocalProximityAlert(
   enableSiren: boolean = true,
   type: SirenAlertType = 'community',
   subtitle?: string,
-  scheduleSystemNotification: boolean = true
+  scheduleSystemNotification: boolean = true,
+  category?: string
 ): Promise<void> {
   try {
+    let resolvedCategory = category;
+    if (!resolvedCategory) {
+      const lower = `${title} ${body}`.toLowerCase();
+      if (type === 'seismic' || lower.includes('sismo') || lower.includes('terremoto')) {
+        resolvedCategory = 'SEISMIC';
+      } else if (lower.includes('incendio') || lower.includes('fuego')) {
+        resolvedCategory = 'FIRE';
+      } else if (lower.includes('derrumbe') || lower.includes('deslizamiento')) {
+        resolvedCategory = 'LANDSLIDE';
+      } else if (lower.includes('accidente') || lower.includes('choque') || lower.includes('vía') || lower.includes('via')) {
+        resolvedCategory = 'ACCIDENT';
+      } else if (lower.includes('estructura') || lower.includes('colapso') || lower.includes('edificio')) {
+        resolvedCategory = 'STRUCTURAL_DAMAGE';
+      } else {
+        resolvedCategory = 'ROAD_BLOCK';
+      }
+    }
+
     // 1. Despachar banner visual flotante dentro de la app con estetica de marca ALERA
     if (bannerCallback) {
       try {
-        bannerCallback({ title, body, type, subtitle });
+        bannerCallback({ title, body, type, subtitle, category: resolvedCategory });
       } catch {
         // Ignorar
       }

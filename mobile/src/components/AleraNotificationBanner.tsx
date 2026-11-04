@@ -5,20 +5,21 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
-  Image,
   Dimensions,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ShieldAlert, AlertTriangle, X } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import { registerBannerListener } from '../services/notifications';
 import { SirenAlertType, stopEmergencySiren } from '../services/sound';
+import { AleraCategoryIcon } from './AleraBrand';
 
 interface BannerData {
   title: string;
   body: string;
   type: SirenAlertType;
   subtitle?: string;
+  category?: string;
 }
 
 export const AleraNotificationBanner: React.FC = () => {
@@ -71,7 +72,8 @@ export const AleraNotificationBanner: React.FC = () => {
   if (!currentAlert) return null;
 
   const isSeismic = currentAlert.type === 'seismic';
-  const badgeSource = require('../../assets/notification-badge-dark.png');
+  const alertColor = isSeismic ? '#EF4444' : '#F06A35';
+  const categoryType = isSeismic ? 'SEISMIC' : (currentAlert.category || 'ROAD_BLOCK');
 
   return (
     <Animated.View
@@ -84,19 +86,33 @@ export const AleraNotificationBanner: React.FC = () => {
       ]}
     >
       <TouchableOpacity
-        style={styles.bannerCard}
+        style={[
+          styles.bannerCard,
+          {
+            borderColor: isSeismic ? '#EF4444' : '#F06A35',
+            shadowColor: alertColor,
+          },
+        ]}
         activeOpacity={0.9}
         onPress={() => {
           stopEmergencySiren();
           hideAlert();
         }}
       >
-        {/* Lado Izquierdo: Badge oficial de ALERA */}
-        <View style={styles.badgeWrapper}>
-          <Image
-            source={badgeSource}
-            style={styles.badgeImage}
-            resizeMode="cover"
+        {/* Lado Izquierdo: Icono especifico del tipo de alerta */}
+        <View
+          style={[
+            styles.badgeWrapper,
+            {
+              backgroundColor: isSeismic ? 'rgba(239, 68, 68, 0.16)' : 'rgba(240, 106, 53, 0.16)',
+              borderColor: alertColor,
+            },
+          ]}
+        >
+          <AleraCategoryIcon
+            type={categoryType}
+            size={24}
+            color={alertColor}
           />
         </View>
 
@@ -104,8 +120,10 @@ export const AleraNotificationBanner: React.FC = () => {
         <View style={styles.contentWrapper}>
           <View style={styles.headerRow}>
             <View style={styles.brandRow}>
-              <View style={[styles.pulseDot, { backgroundColor: isSeismic ? '#D93829' : '#F06A35' }]} />
-              <Text style={styles.brandText}>ALERA</Text>
+              <View style={[styles.pulseDot, { backgroundColor: alertColor }]} />
+              <Text style={[styles.brandText, { color: alertColor }]}>
+                {isSeismic ? 'ALERTA SÍSMICA' : 'ALERTA COMUNITARIA'}
+              </Text>
             </View>
             <Text style={styles.timeText}>Ahora</Text>
           </View>
@@ -168,10 +186,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#0D0F12',
-    borderWidth: 1,
-    borderColor: '#2A2E37',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
     marginRight: 10,
   },
   badgeImage: {

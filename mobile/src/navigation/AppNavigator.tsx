@@ -24,8 +24,7 @@ export type RootStackParamList = {
 };
 
 export type BottomTabParamList = {
-  Mapa: undefined;
-  Alertas: undefined;
+  Sismos: undefined;
   Comunidad: undefined;
   Perfil: undefined;
 };
@@ -56,43 +55,31 @@ function BottomTabNavigator() {
         },
       }}
     >
-      {/* Tab 1: Mapa Sísmico Nacional con icono de mapa y pulso */}
+      {/* Tab 1: Sismos Nacionales */}
       <Tab.Screen
-        name="Mapa"
+        name="Sismos"
         component={HomeMapScreen}
         options={{
-          tabBarLabel: 'Mapa',
+          tabBarLabel: 'Sismos',
           tabBarIcon: ({ color }) => (
-            <AleraNavIcon tab="Mapa" color={color} size={22} />
+            <AleraNavIcon tab="Sismos" color={color} size={22} />
           ),
         }}
       />
 
-      {/* Tab 2: Ajustes de Alerta y Sirena con campana de ondas */}
-      <Tab.Screen
-        name="Alertas"
-        component={AlertSettingsScreen}
-        options={{
-          tabBarLabel: 'Alertas',
-          tabBarIcon: ({ color }) => (
-            <AleraNavIcon tab="Alertas" color={color} size={22} />
-          ),
-        }}
-      />
-
-      {/* Tab 3: Alertas Comunitarias Vecinales con ondas de difusion */}
+      {/* Tab 2: Alertas Comunitarias */}
       <Tab.Screen
         name="Comunidad"
         component={CommunityAlertsScreen}
         options={{
-          tabBarLabel: 'Comunidad',
+          tabBarLabel: 'Alertas Comunitarias',
           tabBarIcon: ({ color }) => (
-            <AleraNavIcon tab="Comunidad" color={color} size={22} />
+            <AleraNavIcon tab="AlertasComunitarias" color={color} size={22} />
           ),
         }}
       />
 
-      {/* Tab 4: Perfil y Estado del Dispositivo con pulso */}
+      {/* Tab 3: Perfil y Ajustes */}
       <Tab.Screen
         name="Perfil"
         component={ProfileScreen}

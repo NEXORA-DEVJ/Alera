@@ -15,7 +15,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AleraInteractiveMap, AleraInteractiveMapRef } from '../components/AleraInteractiveMap';
 import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import {
-  Activity,
   Search,
   SlidersHorizontal,
   ChevronRight,
@@ -31,10 +30,10 @@ import {
   Sun,
   Moon,
   Navigation,
+  X,
 } from 'lucide-react-native';
 import { ThemeColors } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
-import { PrimaryButton } from '../components/PrimaryButton';
 import { AleraFullLogo } from '../components/AleraBrand';
 import { api, generateUUID } from '../services/api';
 import { getRealDeviceLocation } from '../services/location';
@@ -44,14 +43,115 @@ interface Props {
   navigation: any;
 }
 
-// Cálculo esférico Haversine de distancia en km entre el GPS del usuario y el epicentro
+// Catalogo exhaustivo de coordenadas para capitales y municipios principales de Colombia
+// Permite resolucion instantanea sin importar si el usuario escribe con o sin tildes.
+const COLOMBIAN_CITIES: Record<string, { lat: number; lon: number; name: string }> = {
+  bogota: { lat: 4.7110, lon: -74.0721, name: 'Bogota' },
+  medellin: { lat: 6.2442, lon: -75.5812, name: 'Medellin' },
+  cali: { lat: 3.4516, lon: -76.5320, name: 'Cali' },
+  barranquilla: { lat: 10.9685, lon: -74.7813, name: 'Barranquilla' },
+  cartagena: { lat: 10.3910, lon: -75.4794, name: 'Cartagena' },
+  cucuta: { lat: 7.8939, lon: -72.5078, name: 'Cucuta' },
+  bucaramanga: { lat: 7.1254, lon: -73.1198, name: 'Bucaramanga' },
+  pereira: { lat: 4.8133, lon: -75.6961, name: 'Pereira' },
+  santamarta: { lat: 11.2408, lon: -74.1990, name: 'Santa Marta' },
+  'santa marta': { lat: 11.2408, lon: -74.1990, name: 'Santa Marta' },
+  ibague: { lat: 4.4389, lon: -75.2322, name: 'Ibague' },
+  pasto: { lat: 1.2136, lon: -77.2811, name: 'Pasto' },
+  manizales: { lat: 5.0689, lon: -75.5174, name: 'Manizales' },
+  neiva: { lat: 2.9273, lon: -75.2819, name: 'Neiva' },
+  villavicencio: { lat: 4.1420, lon: -73.6266, name: 'Villavicencio' },
+  armenia: { lat: 4.5339, lon: -75.6811, name: 'Armenia' },
+  valledupar: { lat: 10.4631, lon: -73.2532, name: 'Valledupar' },
+  monteria: { lat: 8.7479, lon: -75.8814, name: 'Monteria' },
+  sincelejo: { lat: 9.3047, lon: -75.3978, name: 'Sincelejo' },
+  popayan: { lat: 2.4448, lon: -76.6147, name: 'Popayan' },
+  tunja: { lat: 5.5353, lon: -73.3678, name: 'Tunja' },
+  riohacha: { lat: 11.5444, lon: -72.9072, name: 'Riohacha' },
+  florencia: { lat: 1.6144, lon: -75.6062, name: 'Florencia' },
+  yopal: { lat: 5.3378, lon: -72.3959, name: 'Yopal' },
+  quibdo: { lat: 5.6919, lon: -76.6583, name: 'Quibdo' },
+  mocoa: { lat: 1.1483, lon: -76.6472, name: 'Mocoa' },
+  sanandres: { lat: 12.5847, lon: -81.7006, name: 'San Andres' },
+  'san andres': { lat: 12.5847, lon: -81.7006, name: 'San Andres' },
+  arauca: { lat: 7.0847, lon: -70.7591, name: 'Arauca' },
+  leticia: { lat: -4.2153, lon: -69.9406, name: 'Leticia' },
+  inirida: { lat: 3.8653, lon: -67.9239, name: 'Inirida' },
+  mitu: { lat: 1.1983, lon: -70.1733, name: 'Mitu' },
+  puertocarreno: { lat: 6.1890, lon: -67.4859, name: 'Puerto Carreno' },
+  'puerto carreno': { lat: 6.1890, lon: -67.4859, name: 'Puerto Carreno' },
+  soacha: { lat: 4.5800, lon: -74.2167, name: 'Soacha' },
+  bello: { lat: 6.3333, lon: -75.5500, name: 'Bello' },
+  palmira: { lat: 3.5394, lon: -76.3036, name: 'Palmira' },
+  buenaventura: { lat: 3.8801, lon: -77.0312, name: 'Buenaventura' },
+  barrancabermeja: { lat: 7.0653, lon: -73.8547, name: 'Barrancabermeja' },
+  tulua: { lat: 4.0847, lon: -76.1954, name: 'Tulua' },
+  envigado: { lat: 6.1667, lon: -75.5833, name: 'Envigado' },
+  itagui: { lat: 6.1728, lon: -75.6094, name: 'Itagui' },
+  dosquebradas: { lat: 4.8333, lon: -75.6667, name: 'Dosquebradas' },
+  sogamoso: { lat: 5.7144, lon: -72.9339, name: 'Sogamoso' },
+  duitama: { lat: 5.8267, lon: -73.0336, name: 'Duitama' },
+  girardot: { lat: 4.3014, lon: -74.8058, name: 'Girardot' },
+  facatativa: { lat: 4.8144, lon: -74.3547, name: 'Facatativa' },
+  zipaquira: { lat: 5.0267, lon: -74.0042, name: 'Zipaquira' },
+  chia: { lat: 4.8633, lon: -74.0558, name: 'Chia' },
+  fusagasuga: { lat: 4.3372, lon: -74.3644, name: 'Fusagasuga' },
+  cartago: { lat: 4.7464, lon: -75.9117, name: 'Cartago' },
+  magangue: { lat: 9.2428, lon: -74.7547, name: 'Magangue' },
+  piedecuesta: { lat: 6.9881, lon: -73.0494, name: 'Piedecuesta' },
+  giron: { lat: 7.0683, lon: -73.1697, name: 'Giron' },
+  floridablanca: { lat: 7.0622, lon: -73.0864, name: 'Floridablanca' },
+  apartado: { lat: 7.8825, lon: -76.6258, name: 'Apartado' },
+  turbo: { lat: 8.0928, lon: -76.7283, name: 'Turbo' },
+  caucasia: { lat: 7.9861, lon: -75.1956, name: 'Caucasia' },
+  ipiales: { lat: 0.8292, lon: -77.6433, name: 'Ipiales' },
+  tumaco: { lat: 1.7986, lon: -78.8156, name: 'Tumaco' },
+  santander: { lat: 7.0, lon: -73.2, name: 'Santander' },
+  antioquia: { lat: 6.5, lon: -75.5, name: 'Antioquia' },
+  cundinamarca: { lat: 4.8, lon: -74.1, name: 'Cundinamarca' },
+  valle: { lat: 3.8, lon: -76.5, name: 'Valle del Cauca' },
+  boyaca: { lat: 5.5, lon: -73.0, name: 'Boyaca' },
+  tolima: { lat: 4.0, lon: -75.2, name: 'Tolima' },
+  huila: { lat: 2.5, lon: -75.5, name: 'Huila' },
+  caldas: { lat: 5.2, lon: -75.3, name: 'Caldas' },
+  risaralda: { lat: 4.9, lon: -75.8, name: 'Risaralda' },
+  quindio: { lat: 4.5, lon: -75.7, name: 'Quindio' },
+  meta: { lat: 3.5, lon: -73.0, name: 'Meta' },
+  narino: { lat: 1.5, lon: -77.5, name: 'Narino' },
+  cauca: { lat: 2.5, lon: -76.8, name: 'Cauca' },
+  cesar: { lat: 9.5, lon: -73.5, name: 'Cesar' },
+  cordoba: { lat: 8.5, lon: -75.5, name: 'Cordoba' },
+  sucre: { lat: 9.0, lon: -75.0, name: 'Sucre' },
+  magdalena: { lat: 10.5, lon: -74.2, name: 'Magdalena' },
+  guajira: { lat: 11.5, lon: -72.8, name: 'La Guajira' },
+  'la guajira': { lat: 11.5, lon: -72.8, name: 'La Guajira' },
+  casanare: { lat: 5.5, lon: -71.5, name: 'Casanare' },
+  choco: { lat: 5.5, lon: -76.8, name: 'Choco' },
+  caqueta: { lat: 1.0, lon: -74.0, name: 'Caqueta' },
+  putumayo: { lat: 0.5, lon: -76.0, name: 'Putumayo' },
+  guaviare: { lat: 2.0, lon: -72.0, name: 'Guaviare' },
+  vaupes: { lat: 1.0, lon: -70.5, name: 'Vaupes' },
+  vichada: { lat: 4.5, lon: -69.5, name: 'Vichada' },
+  guainia: { lat: 2.5, lon: -68.5, name: 'Guainia' },
+  amazonas: { lat: -2.0, lon: -71.5, name: 'Amazonas' },
+};
+
+// Normalizacion fonetica y remocion de diacriticos
+const normalizeSearchText = (text: string): string =>
+  (text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+// Calculo esferico Haversine de distancia en km entre dos puntos
 const calculateDistanceKm = (
   lat1: number,
   lon1: number,
   lat2: number,
   lon2: number
 ): number => {
-  const R = 6371; // Radio de la Tierra en km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -85,7 +185,7 @@ const getRelativeTime = (isoString?: string): string => {
   return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
 };
 
-// Formato conciso de fecha y hora que no satura el ancho de la tarjeta
+// Formato conciso de fecha y hora
 const formatConciseDateTime = (isoString?: string): string => {
   if (!isoString) return 'Fecha n/d';
   const date = new Date(isoString);
@@ -100,7 +200,7 @@ const formatConciseDateTime = (isoString?: string): string => {
     minute: '2-digit',
     hour12: false,
   });
-  return `${dayMonth} • ${time} COT`;
+  return `${dayMonth} · ${time} COT`;
 };
 
 export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
@@ -112,20 +212,34 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
   const [events, setEvents] = useState<SeismicEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Busqueda y localizacion de municipios
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchingCity, setSearchingCity] = useState<boolean>(false);
+  const [searchedCity, setSearchedCity] = useState<{
+    latitude: number;
+    longitude: number;
+    name: string;
+  } | null>(null);
+
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  // Control para mostrar u ocultar el radio de afectación
+  // Control para mostrar u ocultar el radio de afectacion
   const [showRadius, setShowRadius] = useState<boolean>(true);
 
-  // Ubicación GPS real del celular
+  // Ubicacion GPS real del celular
   const [userCoord, setUserCoord] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  // Actualización automática al enfocar pantalla
+  // Filtro de temporalidad: 'TODAY' (ultimas 24 horas) o 'ALL' (todos los recientes)
+  const [timeFilter, setTimeFilter] = useState<'TODAY' | 'ALL'>('TODAY');
+
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const EVENTS_CACHE_KEY = '@alera_events_cache';
+
+  // Actualizacion automatica al enfocar pantalla
   useFocusEffect(
     useCallback(() => {
-      loadRecentEvents();
+      loadRecentEvents(false);
     }, [])
   );
 
@@ -144,7 +258,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         longitudeDelta: 3.5,
       });
 
-      // Reportar ubicación a Redis para el cálculo de alertas
+      // Reportar ubicacion para calculo de alertas
       try {
         let devId = await AsyncStorage.getItem('@alera_device_id');
         if (!devId) {
@@ -154,23 +268,21 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         api.updateLocation(devId, loc.latitude, loc.longitude).catch(() => {});
       } catch {}
     }
-    await loadRecentEvents();
+    await loadRecentEvents(true);
   };
-
-  const EVENTS_CACHE_KEY = '@alera_events_cache';
 
   const loadRecentEvents = async (showSpinner = true) => {
     try {
       if (showSpinner) setLoading(true);
       setErrorMessage(null);
 
-      // Mostrar inmediatamente desde cache mientras se carga la red
+      // Carga instantanea desde cache local
       if (showSpinner) {
         try {
           const cached = await AsyncStorage.getItem(EVENTS_CACHE_KEY);
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (parsed.length > 0) {
+            if (Array.isArray(parsed) && parsed.length > 0) {
               setEvents(parsed);
               setSelectedEventId(parsed[0].id);
               setLoading(false);
@@ -182,8 +294,9 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
       const data = await api.getRecentSeismicEvents(500);
       if (data && data.length > 0) {
         setEvents(data);
-        setSelectedEventId(data[0].id);
-        // Guardar en cache para proxima carga
+        if (!selectedEventId) {
+          setSelectedEventId(data[0].id);
+        }
         AsyncStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(data)).catch(() => {});
       }
     } catch {
@@ -193,33 +306,61 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  // Buscador activo de municipios en Colombia
+  // Buscador de municipios de Colombia con soporte para tildes y sin tildes
   const handleSearchCity = async () => {
-    if (!searchQuery.trim()) return;
+    const raw = searchQuery.trim();
+    if (!raw) {
+      setSearchedCity(null);
+      return;
+    }
 
     try {
       setSearchingCity(true);
-      const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=co&limit=1&q=${encodeURIComponent(
-        searchQuery.trim()
-      )}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'AleraApp/1.0' } });
-      const places = await res.json();
+      const clean = normalizeSearchText(raw);
 
-      if (places && places.length > 0) {
-        const lat = parseFloat(places[0].lat);
-        const lon = parseFloat(places[0].lon);
+      let targetLat: number | null = null;
+      let targetLon: number | null = null;
+      let targetName = raw;
+
+      // 1. Busqueda instantanea en catalogo de Colombia (sin red, cero latencia)
+      if (COLOMBIAN_CITIES[clean]) {
+        targetLat = COLOMBIAN_CITIES[clean].lat;
+        targetLon = COLOMBIAN_CITIES[clean].lon;
+        targetName = COLOMBIAN_CITIES[clean].name;
+      } else {
+        // 2. Busqueda en Nominatim con pais Colombia forzado
+        const url = `https://nominatim.openstreetmap.org/search?format=json&countrycodes=co&limit=1&q=${encodeURIComponent(
+          clean + ', Colombia'
+        )}`;
+        const res = await fetch(url, { headers: { 'User-Agent': 'AleraApp/1.0' } });
+        const places = await res.json();
+        if (places && places.length > 0) {
+          targetLat = parseFloat(places[0].lat);
+          targetLon = parseFloat(places[0].lon);
+          targetName = places[0].display_name ? places[0].display_name.split(',')[0] : raw;
+        }
+      }
+
+      if (targetLat !== null && targetLon !== null) {
+        setSearchedCity({ latitude: targetLat, longitude: targetLon, name: targetName });
+
         mapRef.current?.animateToRegion({
-          latitude: lat,
-          longitude: lon,
-          latitudeDelta: 0.6,
-          longitudeDelta: 0.6,
+          latitude: targetLat,
+          longitude: targetLon,
+          latitudeDelta: 1.5,
+          longitudeDelta: 1.5,
         });
       }
     } catch {
-      // Ignorar
+      // Ignorar errores transitorios de red
     } finally {
       setSearchingCity(false);
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchedCity(null);
   };
 
   const getMagnitudeColor = (mag: number): string => {
@@ -229,11 +370,6 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     return colors.successGreen;
   };
 
-  // Filtro de temporalidad: 'TODAY' (ultimas 24 horas) o 'ALL' (todos los recientes)
-  const [timeFilter, setTimeFilter] = useState<'TODAY' | 'ALL'>('TODAY');
-
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
   const todayEventsCount = useMemo(() => {
     const now = Date.now();
     return events.filter((e) => {
@@ -242,35 +378,38 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     }).length;
   }, [events]);
 
-  const normalizeSearchText = (text: string): string =>
-    (text || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
-
+  // Lista de sismos filtrados y ordenados
+  // Si el usuario busco una ciudad, se ordenan mostrando los sismos mas cercanos a esa ciudad
   const filteredEvents = useMemo(() => {
     const now = Date.now();
-    const query = normalizeSearchText(searchQuery);
+    let list = [...events];
 
-    return events.filter((e) => {
-      // Normalización fonética y de tildes para búsqueda de municipios colombianos
-      if (query.length > 0) {
-        const desc = normalizeSearchText(e.epicenterDescription);
-        if (!desc.includes(query)) {
-          return false;
-        }
-        // Al buscar una ciudad específica, mostrar todas las coincidencias disponibles
-        return true;
-      }
-
-      if (timeFilter === 'TODAY') {
+    if (timeFilter === 'TODAY') {
+      list = list.filter((e) => {
         const eventTime = new Date(e.originTime).getTime();
         return now - eventTime <= ONE_DAY_MS;
-      }
-      return true;
-    });
-  }, [events, searchQuery, timeFilter]);
+      });
+    }
+
+    if (searchedCity) {
+      return list
+        .map((e) => ({
+          ...e,
+          _dist: calculateDistanceKm(searchedCity.latitude, searchedCity.longitude, e.latitude, e.longitude),
+        }))
+        .sort((a, b) => a._dist - b._dist);
+    }
+
+    const query = normalizeSearchText(searchQuery);
+    if (query.length > 0) {
+      return list.filter((e) => {
+        const desc = normalizeSearchText(e.epicenterDescription);
+        return desc.includes(query);
+      });
+    }
+
+    return list;
+  }, [events, searchQuery, timeFilter, searchedCity]);
 
   const mapMarkers = useMemo(() => {
     return filteredEvents.map((e) => ({
@@ -286,6 +425,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     }));
   }, [filteredEvents]);
 
+  // Circulos de afectacion sismica: visibles desde 3.0 M y para el sismo seleccionado
   const mapCircles = useMemo(() => {
     if (!showRadius) return [];
     return filteredEvents
@@ -309,7 +449,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         <AleraFullLogo size={36} />
 
         <View style={styles.headerActionsRow}>
-          {/* Botón de Cambio de Tema (Oscuro / Blanco) */}
+          {/* Boton de Cambio de Tema */}
           <TouchableOpacity
             style={styles.headerActionButton}
             onPress={toggleTheme}
@@ -323,19 +463,19 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          {/* Botón de Ajustes Rápidos */}
+          {/* Boton de Ajustes Rapidos */}
           <TouchableOpacity
             style={styles.headerActionButton}
             onPress={() => navigation.navigate('AlertSettings')}
             activeOpacity={0.8}
-            accessibilityLabel="Configuración de alertas"
+            accessibilityLabel="Configuracion de alertas"
           >
             <Radio size={19} color={colors.textSecondary} strokeWidth={1.8} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* 2. SEARCH / FILTER BAR ACTIVO */}
+      {/* 2. SEARCH / FILTER BAR ACTIVO CON BOTON DE LIMPIEZA */}
       <View style={styles.searchSection}>
         <View style={styles.searchInputContainer}>
           <Search size={18} color={colors.textMuted} strokeWidth={1.8} />
@@ -344,10 +484,18 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
             placeholder="Buscar municipio o ciudad de Colombia..."
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (!text.trim()) setSearchedCity(null);
+            }}
             onSubmitEditing={handleSearchCity}
             returnKeyType="search"
           />
+          {searchQuery.length > 0 ? (
+            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7} style={styles.clearSearchInputButton}>
+              <X size={16} color={colors.textSecondary} strokeWidth={2} />
+            </TouchableOpacity>
+          ) : null}
           {searchingCity ? (
             <ActivityIndicator size="small" color={colors.seismicAccent} />
           ) : (
@@ -358,64 +506,10 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
 
-      {/* 2.1 SELECTOR DE TEMPORALIDAD DEL MAPA (SISMOS DE HOY VS HISTORIAL) */}
-      <View style={styles.timeFilterRow}>
-        <TouchableOpacity
-          style={[
-            styles.timeFilterChip,
-            timeFilter === 'TODAY' && styles.timeFilterChipActive,
-          ]}
-          onPress={() => setTimeFilter('TODAY')}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.timeFilterDot,
-              { backgroundColor: timeFilter === 'TODAY' ? colors.seismicAccent : colors.textMuted },
-            ]}
-          />
-          <Text
-            style={[
-              styles.timeFilterText,
-              timeFilter === 'TODAY' && styles.timeFilterTextActive,
-            ]}
-          >
-            Hoy (24h): {todayEventsCount}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.timeFilterChip,
-            timeFilter === 'ALL' && styles.timeFilterChipActive,
-          ]}
-          onPress={() => setTimeFilter('ALL')}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.timeFilterText,
-              timeFilter === 'ALL' && styles.timeFilterTextActive,
-            ]}
-          >
-            Todos ({events.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.historyLinkButton}
-          onPress={() => navigation.navigate('SeismicList')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.historyLinkText}>Ver Lista</Text>
-          <ChevronRight size={14} color={colors.seismicAccent} strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
-
-      {/* 3. NATIVE MAP CONTAINER + FLOATING CONTROLS */}
+      {/* 3. MAPA NATIVO EXPANDIDO CON CONTROLES FLOTANTES DESACOPLADOS */}
       <View style={styles.mapWrapper}>
         <View style={styles.mapContainer}>
-          <MapErrorBoundary fallbackMessage="El mapa interactivo requiere soporte de servicios de localización. Los sismos recientes se listan abajo.">
+          <MapErrorBoundary fallbackMessage="El mapa interactivo requiere soporte de servicios de localizacion. Los sismos recientes se listan abajo.">
             <AleraInteractiveMap
               ref={mapRef}
               initialRegion={{
@@ -439,7 +533,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           </MapErrorBoundary>
         </View>
 
-        {/* Boton flotante: Mostrar / Ocultar Radio de Afectacion (fuera del overflow:hidden) */}
+        {/* Boton flotante: Mostrar / Ocultar Radio de Afectacion */}
         <TouchableOpacity
           style={styles.radiusToggleButton}
           onPress={() => setShowRadius(!showRadius)}
@@ -455,7 +549,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
 
-        {/* Boton GPS */}
+        {/* Boton GPS recentrar */}
         <TouchableOpacity
           style={styles.gpsRecenterButton}
           activeOpacity={0.8}
@@ -470,7 +564,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                 longitudeDelta: 2.0,
               });
             }
-            loadRecentEvents();
+            loadRecentEvents(true);
           }}
         >
           {loading ? (
@@ -481,21 +575,78 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* 4. RECENT EVENTS CARDS CON ESTILO MINIMALISTA "MI TERREMOTO" */}
+      {/* 4. SECCION INFERIOR UNIFICADA: FILTROS + SISMOS RECIENTES */}
       <View style={styles.eventsSection}>
-        <View style={styles.sectionHeader}>
+        {/* Cabecera con titulo, filtros temporales y boton Ver Lista ampliado */}
+        <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>SISMOS RECIENTES</Text>
-            <Text style={styles.sectionBadge}>SGC REAL ({events.length})</Text>
+            <Text style={styles.sectionTitle}>
+              {searchedCity ? `CERCA DE ${searchedCity.name.toUpperCase()}` : 'SISMOS RECIENTES'}
+            </Text>
+            {searchedCity ? (
+              <TouchableOpacity
+                style={styles.clearSearchBadge}
+                onPress={handleClearSearch}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearSearchBadgeText}>Quitar x</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
-          <TouchableOpacity
-            style={styles.viewAllRow}
-            onPress={() => navigation.navigate('SeismicList')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.viewAllText}>Ver lista completa</Text>
-            <ChevronRight size={14} color={colors.textSecondary} strokeWidth={1.8} />
-          </TouchableOpacity>
+
+          {/* Filtros Hoy vs Todos y Enlace Ver Lista con flecha ampliada */}
+          <View style={styles.filterControlsRow}>
+            <TouchableOpacity
+              style={[
+                styles.timeFilterChip,
+                timeFilter === 'TODAY' && styles.timeFilterChipActive,
+              ]}
+              onPress={() => setTimeFilter('TODAY')}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.timeFilterDot,
+                  { backgroundColor: timeFilter === 'TODAY' ? colors.seismicAccent : colors.textMuted },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.timeFilterText,
+                  timeFilter === 'TODAY' && styles.timeFilterTextActive,
+                ]}
+              >
+                Hoy: {todayEventsCount}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.timeFilterChip,
+                timeFilter === 'ALL' && styles.timeFilterChipActive,
+              ]}
+              onPress={() => setTimeFilter('ALL')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.timeFilterText,
+                  timeFilter === 'ALL' && styles.timeFilterTextActive,
+                ]}
+              >
+                Todos ({events.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.historyLinkButtonLarge}
+              onPress={() => navigation.navigate('SeismicList')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.historyLinkTextLarge}>Lista</Text>
+              <ChevronRight size={17} color={colors.seismicAccent} strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
@@ -516,7 +667,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.centerFeedbackBox}>
             <Text style={styles.feedbackText}>
               {timeFilter === 'TODAY'
-                ? 'No se registran sismos en las últimas 24 horas en el catálogo.'
+                ? 'No se registran sismos en las ultimas 24 horas en el catalogo.'
                 : 'No se registran sismos en este momento en la base de datos.'}
             </Text>
           </View>
@@ -524,7 +675,10 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalScrollContent}
+            contentContainerStyle={[
+              styles.horizontalScrollContent,
+              { paddingBottom: Math.max(insets.bottom, 12) + 6 },
+            ]}
           >
             {filteredEvents.map((item) => {
               const magColor = getMagnitudeColor(item.magnitude);
@@ -532,9 +686,11 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
               const relativeTime = getRelativeTime(item.originTime);
               const conciseTime = formatConciseDateTime(item.originTime);
 
-              // Distancia dinámica en km desde el GPS del usuario hasta el epicentro
-              const distanceKm = userCoord
-                ? calculateDistanceKm(userCoord.latitude, userCoord.longitude, item.latitude, item.longitude)
+              // Distancia respecto a la ciudad buscada o al GPS del usuario
+              const referenceCoord = searchedCity ? searchedCity : userCoord;
+              const referenceName = searchedCity ? searchedCity.name : null;
+              const distanceKm = referenceCoord
+                ? calculateDistanceKm(referenceCoord.latitude, referenceCoord.longitude, item.latitude, item.longitude)
                 : null;
 
               return (
@@ -556,7 +712,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                     navigation.navigate('SeismicDetail', { event: item });
                   }}
                 >
-                  {/* Fila Superior: Badge Magnitud + Tiempo Relativo ("Hace 15 min") */}
+                  {/* Fila Superior: Badge Magnitud + Tiempo Relativo */}
                   <View style={styles.cardTopRow}>
                     <View style={[styles.magnitudeBadge, { backgroundColor: magColor }]}>
                       <Text style={styles.magnitudeNumber}>{item.magnitude.toFixed(1)}</Text>
@@ -568,7 +724,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                     </View>
                   </View>
 
-                  {/* Epicentro Geográfico */}
+                  {/* Epicentro Geografico */}
                   <Text style={styles.cardEpicenter} numberOfLines={1}>
                     {item.epicenterDescription}
                   </Text>
@@ -578,7 +734,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                     {conciseTime}
                   </Text>
 
-                  {/* Fila Inferior: Profundidad y Distancia al Usuario */}
+                  {/* Fila Inferior: Profundidad y Distancia al Epicentro */}
                   <View style={styles.cardDetailsRow}>
                     <View style={styles.detailItem}>
                       <MapPin size={11} color={colors.textSecondary} strokeWidth={1.8} />
@@ -589,7 +745,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                       <View style={styles.detailItem}>
                         <Navigation size={11} color={colors.gpsBlue} strokeWidth={1.8} />
                         <Text style={[styles.detailText, { color: colors.gpsBlue, fontWeight: '700' }]}>
-                          A {distanceKm} km
+                          A {distanceKm} km {referenceName ? `de ${referenceName}` : ''}
                         </Text>
                       </View>
                     ) : (
@@ -607,14 +763,6 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           </ScrollView>
         )}
       </View>
-
-      {/* 5. BOTTOM CTA ACTION */}
-      <View style={[styles.bottomCtaContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <PrimaryButton
-          title="+ Reportar Alerta Comunitaria"
-          onPress={() => navigation.navigate('NewReport')}
-        />
-      </View>
     </View>
   );
 };
@@ -630,65 +778,16 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 20,
-      paddingTop: 8,
-      paddingBottom: 10,
-    },
-    brandRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    brandIconWrapper: {
-      width: 40,
-      height: 40,
-      borderRadius: 10,
-      backgroundColor: isDark ? '#1E1714' : '#FFEDD5',
-      borderWidth: 1,
-      borderColor: isDark ? '#3D251C' : '#FDBA74',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    brandTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    brandTitleLight: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: colors.textPrimary,
-    },
-    brandTitleAccent: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: colors.seismicAccent,
-      marginLeft: 2,
-    },
-    sgcStatusRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 2,
-    },
-    statusDotLive: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: colors.successGreen,
-    },
-    sgcStatusText: {
-      fontSize: 10,
-      fontWeight: '700',
-      color: colors.textSecondary,
-      letterSpacing: 0.6,
+      paddingVertical: 8,
     },
     headerActionsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 10,
     },
     headerActionButton: {
-      width: 40,
-      height: 40,
+      width: 38,
+      height: 38,
       borderRadius: 10,
       backgroundColor: colors.surfaceCard,
       borderWidth: 1,
@@ -698,7 +797,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     searchSection: {
       paddingHorizontal: 20,
-      marginBottom: 10,
+      marginBottom: 6,
     },
     searchInputContainer: {
       flexDirection: 'row',
@@ -708,98 +807,32 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.surfaceInputBorder,
       borderRadius: 10,
       paddingHorizontal: 14,
-      height: 44,
-      gap: 10,
+      height: 42,
+      gap: 8,
     },
     searchInput: {
       flex: 1,
       color: colors.textPrimary,
       fontSize: 13,
+      paddingVertical: 0,
     },
-    timeFilterRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      marginBottom: 10,
-      gap: 8,
-    },
-    timeFilterChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 16,
-      backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
-      borderColor: colors.surfaceCardBorder,
-      gap: 6,
-    },
-    timeFilterChipActive: {
-      backgroundColor: isDark ? 'rgba(240, 106, 53, 0.15)' : 'rgba(240, 106, 53, 0.1)',
-      borderColor: colors.seismicAccent,
-    },
-    timeFilterDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-    },
-    timeFilterText: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: colors.textSecondary,
-    },
-    timeFilterTextActive: {
-      color: colors.seismicAccent,
-      fontWeight: '700',
-    },
-    historyLinkButton: {
-      marginLeft: 'auto',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      paddingVertical: 4,
-      paddingHorizontal: 4,
-    },
-    historyLinkText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: colors.seismicAccent,
+    clearSearchInputButton: {
+      padding: 4,
     },
     mapWrapper: {
       flex: 1,
-      minHeight: 320,
-      marginHorizontal: 20,
+      minHeight: 330,
+      marginHorizontal: 16,
       position: 'relative',
     },
     mapContainer: {
       flex: 1,
-      minHeight: 320,
+      minHeight: 330,
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.surfaceCardBorder,
       backgroundColor: isDark ? '#11151C' : '#E2E8F0',
-    },
-    userLocationGpsDot: {
-      width: 16,
-      height: 16,
-      borderRadius: 8,
-      backgroundColor: colors.gpsBlue,
-      borderWidth: 3,
-      borderColor: '#FFFFFF',
-    },
-    markerBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
-      borderWidth: 1.5,
-      borderColor: '#FFFFFF',
-      elevation: 5,
-    },
-    markerText: {
-      color: '#FFFFFF',
-      fontWeight: '800',
-      fontSize: 11,
     },
     radiusToggleButton: {
       position: 'absolute',
@@ -838,57 +871,97 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       zIndex: 10,
     },
     eventsSection: {
-      marginTop: 10,
-      paddingBottom: 4,
+      marginTop: 8,
+      paddingBottom: 2,
     },
-    sectionHeader: {
+    sectionHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
+      paddingHorizontal: 18,
       marginBottom: 8,
+      flexWrap: 'nowrap',
     },
     sectionTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 6,
+      flex: 1,
     },
     sectionTitle: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 11,
+      fontWeight: '800',
       color: colors.textSecondary,
-      letterSpacing: 0.8,
+      letterSpacing: 0.6,
     },
-    sectionBadge: {
-      fontSize: 10,
-      fontWeight: '700',
-      color: colors.seismicAccent,
+    clearSearchBadge: {
       backgroundColor: isDark ? '#261710' : '#FFEDD5',
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: 4,
     },
-    viewAllRow: {
+    clearSearchBadgeText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.seismicAccent,
+    },
+    filterControlsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 2,
+      gap: 6,
     },
-    viewAllText: {
-      fontSize: 12,
+    timeFilterChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.surfaceCardBorder,
+      gap: 4,
+    },
+    timeFilterChipActive: {
+      backgroundColor: isDark ? 'rgba(240, 106, 53, 0.15)' : 'rgba(240, 106, 53, 0.1)',
+      borderColor: colors.seismicAccent,
+    },
+    timeFilterDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+    },
+    timeFilterText: {
+      fontSize: 10,
       fontWeight: '600',
       color: colors.textSecondary,
     },
+    timeFilterTextActive: {
+      color: colors.seismicAccent,
+      fontWeight: '700',
+    },
+    historyLinkButtonLarge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      paddingVertical: 4,
+      paddingLeft: 4,
+    },
+    historyLinkTextLarge: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.seismicAccent,
+    },
     horizontalScrollContent: {
-      paddingHorizontal: 20,
+      paddingHorizontal: 18,
       gap: 12,
     },
     eventCard: {
-      width: 260,
+      width: 255,
       backgroundColor: colors.surfaceCard,
       borderRadius: 14,
       borderWidth: 1,
       borderColor: colors.surfaceCardBorder,
-      padding: 14,
+      padding: 12,
     },
     cardTopRow: {
       flexDirection: 'row',
@@ -929,7 +1002,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '600',
     },
     cardEpicenter: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '700',
       color: colors.textPrimary,
       marginBottom: 4,
@@ -975,7 +1048,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.amberAlertBorder,
       borderWidth: 1,
       borderRadius: 12,
-      marginHorizontal: 20,
+      marginHorizontal: 18,
       padding: 12,
       alignItems: 'center',
       gap: 8,
@@ -1000,9 +1073,5 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textPrimary,
       fontSize: 12,
       fontWeight: '600',
-    },
-    bottomCtaContainer: {
-      paddingHorizontal: 20,
-      paddingTop: 8,
     },
   });

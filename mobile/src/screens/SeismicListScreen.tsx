@@ -273,10 +273,7 @@ export const SeismicListScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.backgroundPrimary}
-      />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* TOP HEADER */}
       <View style={styles.topHeader}>
