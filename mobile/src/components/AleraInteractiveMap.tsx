@@ -103,10 +103,13 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
       const initialLng = activeCenter.longitude || -74.2973;
       const initialZoom = deltaToZoom(activeCenter.latitudeDelta);
 
-      // CartoDB Dark Matter para modo oscuro, CartoDB Voyager para modo claro
+      // Capas de mapas de alta fidelidad, 100% libres de API keys y sin marcas de agua:
+      // Modo Claro: ESRI World Street Map (relieve, calles, ciudades nítidas sin marcas)
+      // Modo Oscuro: ESRI World Dark Gray Canvas
       const tileUrl = isDark
-        ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
-        : 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png';
+        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+        : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+      const fallbackTileUrl = 'https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
 
       const markersJson = JSON.stringify(
         markers.map((m) => ({
@@ -232,17 +235,16 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
         });
         window.map = map;
 
-        // Capa de CartoDB libre (Dark Matter / Voyager) con fallback a OpenStreetMap
+        // Capa de mapas satélite/relieve libre (ESRI / OpenStreetMap HOT) sin marcas ni API keys
         var primaryTile = L.tileLayer('${tileUrl}', {
-          subdomains: 'abcd',
-          maxZoom: 19
+          maxZoom: 19,
+          attribution: ''
         }).addTo(map);
 
         primaryTile.on('tileerror', function() {
-          // Si CartoDB tiene algún retraso, activa OpenStreetMap nativo
-          if (!window._osmFallback) {
-            window._osmFallback = true;
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+          if (!window._fallbackLoaded) {
+            window._fallbackLoaded = true;
+            L.tileLayer('${fallbackTileUrl}', { maxZoom: 19 }).addTo(map);
           }
         });
 
