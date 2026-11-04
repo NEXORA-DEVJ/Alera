@@ -1,4 +1,6 @@
 import { registerRootComponent } from 'expo';
+// Registrar definicion de tarea de segundo plano antes del montaje de componentes
+import './src/services/backgroundTask';
 
 import App from './App';
 

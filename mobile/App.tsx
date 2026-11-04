@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StatusBar, AppState } from 'react-native';
+import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -10,8 +10,9 @@ import {
   registerForPushNotificationsAsync,
   triggerLocalProximityAlert,
 } from './src/services/notifications';
-import { SirenAlertType, stopEmergencySiren } from './src/services/sound';
+import { SirenAlertType } from './src/services/sound';
 import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
+import { registerBackgroundSeismicTask } from './src/services/backgroundTask';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateUUID } from './src/services/api';
 import * as Notifications from 'expo-notifications';
@@ -35,7 +36,12 @@ function MainApp() {
         console.warn('[ALERA] Error en inicializacion de GPS:', err);
       });
 
-    // 3. Escuchador reactivo de notificaciones push
+    // 3. Registrar tarea de segundo plano para alertas sismicas (funciona aunque la app este cerrada)
+    registerBackgroundSeismicTask().catch((err) => {
+      console.warn('[ALERA BG] No se pudo registrar tarea de fondo:', err);
+    });
+
+    // 4. Escuchador reactivo de notificaciones push (mientras la app esta abierta)
     let subscription: Notifications.Subscription | null = null;
     try {
       subscription = Notifications.addNotificationReceivedListener((notification) => {
@@ -43,11 +49,12 @@ function MainApp() {
           const content = notification.request.content;
           const data = (content.data || {}) as Record<string, any>;
 
-          if (data.isLocalDispatch) {
+          // Ignorar despachos locales propios para evitar duplicados
+          if (data.isLocalDispatch || data.isBackgroundAlert) {
             return;
           }
 
-          const rawTitle = content.title || 'ALERTA SÍSMICA ALERA';
+          const rawTitle = content.title || 'ALERTA SISMICA ALERA';
           const body = content.body || '';
           const titleUpper = rawTitle.toUpperCase();
 
@@ -58,27 +65,33 @@ function MainApp() {
 
           const subtitle = data.magnitude ? `Magnitud: M ${data.magnitude}` : undefined;
 
+          // Despachar banner visual + sirena (app abierta: primer plano)
           triggerLocalProximityAlert(rawTitle, body, true, type, subtitle, false);
         } catch (listenerErr) {
-          console.warn('[ALERA] Error procesando notificación push entrante:', listenerErr);
+          console.warn('[ALERA] Error procesando notificacion push entrante:', listenerErr);
         }
       });
     } catch (subErr) {
       console.warn('[ALERA] No se pudo inicializar listener de notificaciones:', subErr);
     }
 
-    // 4. Cancelar sirenas o vibraciones si el usuario sale o minimiza la app
-    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState !== 'active') {
-        stopEmergencySiren();
-      }
-    });
+    // 5. Escuchador de toque en notificacion (usuario abre la app desde la bandeja)
+    let tapSubscription: Notifications.Subscription | null = null;
+    try {
+      tapSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = (response.notification.request.content.data || {}) as Record<string, any>;
+        if (data.isBackgroundAlert) {
+          // La app ya se abre; no es necesario hacer nada adicional
+        }
+      });
+    } catch {}
 
     return () => {
       subscription?.remove();
-      appStateSubscription.remove();
+      tapSubscription?.remove();
       stopContinuousLocationTracking();
-      stopEmergencySiren();
+      // No se detiene la sirena ni las notificaciones al minimizar la app.
+      // La tarea de segundo plano sigue corriendo por su cuenta.
     };
   }, []);
 

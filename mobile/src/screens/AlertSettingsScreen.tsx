@@ -9,7 +9,9 @@ import {
   Switch,
   Alert,
   Vibration,
+  Platform,
 } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AleraInteractiveMap } from '../components/AleraInteractiveMap';
@@ -158,6 +160,20 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
       Vibration.vibrate([0, 600, 200, 600, 200, 1200], true);
     }
 
+    // Emitir notificacion nativa del sistema en la bandeja
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PRUEBA DE SIRENA ALERA',
+        body: 'Simulacro acustico y vibracion haptica en ejecucion a maximo volumen.',
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        color: '#F06A35',
+        data: { type: 'test', isLocalDispatch: true },
+        ...(Platform.OS === 'android' ? { channelId: 'alera_emergency_channel' } : {}),
+      },
+      trigger: null,
+    }).catch(() => {});
+
     Alert.alert(
       'PRUEBA DE ALARMA SÍSMICA ACTIVA',
       'ALERTA SÍSMICA SIMULADA\n\nEmitiendo sirena de emergencia a máximo volumen y vibración háptica.\n\nPresiona "DETENER ALARMA" para finalizar la prueba.',
@@ -176,7 +192,7 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.backgroundPrimary} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* TOP APP BAR */}
       <View style={styles.topBar}>

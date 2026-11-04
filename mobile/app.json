@@ -8,7 +8,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.alera.app"
+      "bundleIdentifier": "com.alera.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["fetch", "remote-notification"]
+      }
     },
     "android": {
       "package": "com.alera.app",
@@ -19,7 +22,9 @@
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
         "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "FOREGROUND_SERVICE",
+        "SCHEDULE_EXACT_ALARM"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0D10",
@@ -35,11 +40,13 @@
     "plugins": [
       "./plugins/withCleartextTraffic.js",
       "./plugins/withDisableMinify.js",
+      "expo-task-manager",
+      "expo-background-fetch",
       "expo-audio",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "ALERA requiere tu ubicación para alertarte de forma inmediata si ocurre un sismo o terremoto en tu zona.",
+          "locationAlwaysAndWhenInUsePermission": "ALERA requiere tu ubicacion para alertarte de forma inmediata si ocurre un sismo o terremoto en tu zona.",
           "isAndroidBackgroundLocationEnabled": false
         }
       ],

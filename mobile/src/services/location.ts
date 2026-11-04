@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { api } from './api';
+import { saveLastKnownLocation } from './backgroundTask';
 
 export interface DeviceLocation {
   latitude: number;
@@ -84,6 +85,8 @@ export const startContinuousLocationTracking = async (deviceId: string): Promise
       (position) => {
         const { latitude, longitude } = position.coords;
         api.updateLocation(deviceId, latitude, longitude).catch(() => {});
+        // Guardar ultima ubicacion conocida para la tarea de segundo plano
+        saveLastKnownLocation(latitude, longitude).catch(() => {});
       }
     );
 

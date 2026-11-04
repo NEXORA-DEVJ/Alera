@@ -34,12 +34,18 @@ export const resolveMediaUrl = (url?: string): string => {
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   try {
-    const res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      ...options,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        ...options,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
       const errorBody = await res.json().catch(() => null);

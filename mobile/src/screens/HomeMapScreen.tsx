@@ -157,14 +157,34 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     await loadRecentEvents();
   };
 
-  const loadRecentEvents = async () => {
+  const EVENTS_CACHE_KEY = '@alera_events_cache';
+
+  const loadRecentEvents = async (showSpinner = true) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       setErrorMessage(null);
+
+      // Mostrar inmediatamente desde cache mientras se carga la red
+      if (showSpinner) {
+        try {
+          const cached = await AsyncStorage.getItem(EVENTS_CACHE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.length > 0) {
+              setEvents(parsed);
+              setSelectedEventId(parsed[0].id);
+              setLoading(false);
+            }
+          }
+        } catch {}
+      }
+
       const data = await api.getRecentSeismicEvents(500);
-      setEvents(data || []);
       if (data && data.length > 0) {
+        setEvents(data);
         setSelectedEventId(data[0].id);
+        // Guardar en cache para proxima carga
+        AsyncStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(data)).catch(() => {});
       }
     } catch {
       setErrorMessage('No fue posible conectar con el servidor de Alera (Spring Boot).');
@@ -269,20 +289,20 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
   const mapCircles = useMemo(() => {
     if (!showRadius) return [];
     return filteredEvents
-      .filter((e) => e.magnitude >= 4.0)
+      .filter((e) => e.magnitude >= 3.0 || e.id === selectedEventId)
       .map((e) => ({
         id: `circle-${e.id}`,
         center: { latitude: e.latitude, longitude: e.longitude },
-        radius: e.magnitude * 16000,
-        fillColor: 'rgba(240, 106, 53, 0.15)',
-        strokeColor: colors.seismicAccent,
-        strokeWidth: 1.5,
+        radius: Math.max(20000, e.magnitude * 16000),
+        fillColor: e.magnitude >= 5.0 ? 'rgba(239, 68, 68, 0.22)' : 'rgba(240, 106, 53, 0.18)',
+        strokeColor: e.magnitude >= 5.0 ? '#EF4444' : colors.seismicAccent,
+        strokeWidth: 2,
       }));
-  }, [filteredEvents, showRadius, colors.seismicAccent]);
+  }, [filteredEvents, showRadius, selectedEventId, colors.seismicAccent]);
 
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.backgroundPrimary} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* 1. TOP HEADER BRAND CON TOGGLE DE TEMA */}
       <View style={styles.header}>
@@ -392,32 +412,34 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* 3. NATIVE MAP CONTAINER */}
-      <View style={styles.mapContainer}>
-        <MapErrorBoundary fallbackMessage="El mapa interactivo requiere soporte de servicios de localización. Los sismos recientes se listan abajo.">
-          <AleraInteractiveMap
-            ref={mapRef}
-            initialRegion={{
-              latitude: userCoord ? userCoord.latitude : 4.5709,
-              longitude: userCoord ? userCoord.longitude : -74.2973,
-              latitudeDelta: 6.0,
-              longitudeDelta: 6.0,
-            }}
-            userCoord={userCoord}
-            markers={mapMarkers}
-            circles={mapCircles}
-            isDark={isDark}
-            onMarkerPress={(markerId) => {
-              const selected = filteredEvents.find((e) => e.id === markerId);
-              if (selected) {
-                setSelectedEventId(selected.id);
-                navigation.navigate('SeismicDetail', { event: selected });
-              }
-            }}
-          />
-        </MapErrorBoundary>
+      {/* 3. NATIVE MAP CONTAINER + FLOATING CONTROLS */}
+      <View style={styles.mapWrapper}>
+        <View style={styles.mapContainer}>
+          <MapErrorBoundary fallbackMessage="El mapa interactivo requiere soporte de servicios de localización. Los sismos recientes se listan abajo.">
+            <AleraInteractiveMap
+              ref={mapRef}
+              initialRegion={{
+                latitude: userCoord ? userCoord.latitude : 4.5709,
+                longitude: userCoord ? userCoord.longitude : -74.2973,
+                latitudeDelta: 6.0,
+                longitudeDelta: 6.0,
+              }}
+              userCoord={userCoord}
+              markers={mapMarkers}
+              circles={mapCircles}
+              isDark={isDark}
+              onMarkerPress={(markerId) => {
+                const selected = filteredEvents.find((e) => e.id === markerId);
+                if (selected) {
+                  setSelectedEventId(selected.id);
+                  navigation.navigate('SeismicDetail', { event: selected });
+                }
+              }}
+            />
+          </MapErrorBoundary>
+        </View>
 
-        {/* Botón flotante: Mostrar / Ocultar Radio de Afectación */}
+        {/* Boton flotante: Mostrar / Ocultar Radio de Afectacion (fuera del overflow:hidden) */}
         <TouchableOpacity
           style={styles.radiusToggleButton}
           onPress={() => setShowRadius(!showRadius)}
@@ -433,7 +455,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
 
-        {/* Botón GPS */}
+        {/* Boton GPS */}
         <TouchableOpacity
           style={styles.gpsRecenterButton}
           activeOpacity={0.8}
@@ -485,7 +507,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.errorFeedbackBox}>
             <AlertTriangle size={18} color={colors.amberAlertText} strokeWidth={1.8} />
             <Text style={styles.errorFeedbackText}>{errorMessage}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadRecentEvents}>
+            <TouchableOpacity style={styles.retryButton} onPress={() => { loadRecentEvents(true); }}>
               <RefreshCw size={14} color={colors.textPrimary} strokeWidth={2} />
               <Text style={styles.retryText}>Reintentar</Text>
             </TouchableOpacity>
@@ -743,15 +765,19 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: '700',
       color: colors.seismicAccent,
     },
-    mapContainer: {
+    mapWrapper: {
       flex: 1,
       minHeight: 320,
       marginHorizontal: 20,
+      position: 'relative',
+    },
+    mapContainer: {
+      flex: 1,
+      minHeight: 320,
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.surfaceCardBorder,
-      position: 'relative',
       backgroundColor: isDark ? '#11151C' : '#E2E8F0',
     },
     userLocationGpsDot: {
@@ -788,6 +814,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderRadius: 8,
       borderWidth: 1,
       borderColor: colors.surfaceCardBorder,
+      zIndex: 10,
+      elevation: 6,
     },
     radiusToggleText: {
       fontSize: 11,
@@ -806,7 +834,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       borderColor: colors.surfaceCardBorder,
       alignItems: 'center',
       justifyContent: 'center',
-      elevation: 3,
+      elevation: 6,
+      zIndex: 10,
     },
     eventsSection: {
       marginTop: 10,

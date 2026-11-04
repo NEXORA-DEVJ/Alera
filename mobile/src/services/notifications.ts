@@ -8,16 +8,16 @@ import { playEmergencySiren, SirenAlertType } from './sound';
 const PUSH_TOKEN_STORAGE_KEY = '@alera_expo_push_token';
 const DEVICE_STORAGE_KEY = '@alera_device_id';
 
-// Configuración visual y acústica para notificaciones:
-// En primer plano (app abierta) se suprime el banner tosco del SO / Expo Go para que
-// prevalezca la estética y diseño visual nativo de ALERA (AleraNotificationBanner) con su sirena.
+// Configuracion visual y acustica para notificaciones nativas de Android e iOS:
+// Permite que la notificacion del sistema aparezca en la bandeja superior / pantalla de bloqueo
+// tanto en primer plano como en segundo plano.
 try {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: false, // Ocultar banner genérico del sistema en primer plano (evita logo de Expo Go)
-      shouldPlaySound: false, // La sirena sonora es orquestada directamente por el motor de audio ALERA
+      shouldShowAlert: true,
+      shouldPlaySound: false, // La sirena acustica es orquestada por el motor de audio ALERA
       shouldSetBadge: true,
-      shouldShowBanner: false,
+      shouldShowBanner: true,
       shouldShowList: true,
     }),
   });
@@ -165,10 +165,10 @@ export async function triggerLocalProximityAlert(
   enableSiren: boolean = true,
   type: SirenAlertType = 'community',
   subtitle?: string,
-  scheduleSystemNotification: boolean = false
+  scheduleSystemNotification: boolean = true
 ): Promise<void> {
   try {
-    // 1. Despachar banner visual flotante dentro de la app con estética de marca ALERA
+    // 1. Despachar banner visual flotante dentro de la app con estetica de marca ALERA
     if (bannerCallback) {
       try {
         bannerCallback({ title, body, type, subtitle });
@@ -177,7 +177,7 @@ export async function triggerLocalProximityAlert(
       }
     }
 
-    // 2. Solo despachar notificación del sistema operativo si se solicita explícitamente (ej: en background)
+    // 2. Despachar notificacion del sistema operativo nativo (bandeja / pantalla de bloqueo)
     if (scheduleSystemNotification) {
       const channelId = type === 'seismic' ? 'alera_emergency_channel' : 'alera_community_channel';
 
@@ -190,6 +190,7 @@ export async function triggerLocalProximityAlert(
           priority: Notifications.AndroidNotificationPriority.MAX,
           color: '#F06A35',
           data: { type, isLocalDispatch: true },
+          ...(Platform.OS === 'android' ? { channelId } : {}),
         },
         trigger: null,
       });
