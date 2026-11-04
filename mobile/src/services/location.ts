@@ -23,6 +23,9 @@ export const getRealDeviceLocation = async (deviceId?: string): Promise<DeviceLo
 
     const { latitude, longitude } = position.coords;
 
+    // Guardar ultima ubicacion real conocida para la tarea de segundo plano
+    saveLastKnownLocation(latitude, longitude).catch(() => {});
+
     // Si tenemos un deviceId, sincronizamos la ubicación efímera en Redis y PostGIS en el backend
     if (deviceId) {
       api.updateLocation(deviceId, latitude, longitude).catch(() => {

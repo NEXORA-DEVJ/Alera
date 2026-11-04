@@ -13,13 +13,19 @@ const DEVICE_STORAGE_KEY = '@alera_device_id';
 // tanto en primer plano como en segundo plano.
 try {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: false, // La sirena acustica es orquestada por el motor de audio ALERA
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
+    handleNotification: async (notification) => {
+      // Las notificaciones de segundo plano (backgroundTask) llevan isBackgroundAlert=true.
+      // Para esas, el sistema operativo ya reproduce el sonido del canal de Android.
+      // Para las disparadas en primer plano, el audio lo gestiona playEmergencySiren().
+      const isBackground = notification.request.content.data?.isBackgroundAlert === true;
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: isBackground, // Sonido del SO solo para notificaciones de fondo
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    },
   });
 } catch {
   // Omitir en entornos sin soporte
