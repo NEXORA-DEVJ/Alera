@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import { AleraInteractiveMap } from '../components/AleraInteractiveMap';
 import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import { playEmergencySiren, stopEmergencySiren } from '../services/sound';
 import { api } from '../services/api';
@@ -238,31 +238,29 @@ export const AlertSettingsScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.sectionHeaderTitle}>RADIO DE COBERTURA ESPACIAL</Text>
           <View style={styles.mapCard}>
             <MapErrorBoundary fallbackMessage="Radio de cobertura configurado correctamente.">
-              <MapView
-                style={StyleSheet.absoluteFill}
+              <AleraInteractiveMap
                 region={{
                   latitude: userLocation ? userLocation.latitude : 4.5709,
                   longitude: userLocation ? userLocation.longitude : -74.2973,
                   latitudeDelta: coverageRadiusKm > 100 ? 3.5 : 1.8,
                   longitudeDelta: coverageRadiusKm > 100 ? 3.5 : 1.8,
                 }}
-                userInterfaceStyle={isDark ? 'dark' : 'light'}
-              >
-                {userLocation && (
-                  <>
-                    <Circle
-                      center={userLocation}
-                      radius={coverageRadiusKm * 1000}
-                      fillColor={colors.gpsBlueFill}
-                      strokeColor={colors.gpsBlue}
-                      strokeWidth={1.5}
-                    />
-                    <Marker coordinate={userLocation}>
-                      <View style={styles.userMarkerDot} />
-                    </Marker>
-                  </>
-                )}
-              </MapView>
+                userCoord={userLocation}
+                circles={
+                  userLocation
+                    ? [
+                        {
+                          center: userLocation,
+                          radius: coverageRadiusKm * 1000,
+                          fillColor: colors.gpsBlueFill,
+                          strokeColor: colors.gpsBlue,
+                          strokeWidth: 1.5,
+                        },
+                      ]
+                    : []
+                }
+                isDark={isDark}
+              />
             </MapErrorBoundary>
             <View style={styles.baseLocationTag}>
               <MapPin size={12} color={colors.gpsBlue} strokeWidth={2} />

@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import { AleraInteractiveMap, AleraInteractiveMapRef } from '../components/AleraInteractiveMap';
 import { MapErrorBoundary } from '../components/MapErrorBoundary';
 import {
   Activity,
@@ -105,7 +105,7 @@ const formatConciseDateTime = (isoString?: string): string => {
 
 export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<AleraInteractiveMapRef>(null);
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
@@ -252,6 +252,34 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     });
   }, [events, searchQuery, timeFilter]);
 
+  const mapMarkers = useMemo(() => {
+    return filteredEvents.map((e) => ({
+      id: e.id,
+      coordinate: { latitude: e.latitude, longitude: e.longitude },
+      badgeText: `${e.magnitude.toFixed(1)} M`,
+      badgeColor: getMagnitudeColor(e.magnitude),
+      title: e.epicenterDescription,
+      onPress: () => {
+        setSelectedEventId(e.id);
+        navigation.navigate('SeismicDetail', { event: e });
+      },
+    }));
+  }, [filteredEvents]);
+
+  const mapCircles = useMemo(() => {
+    if (!showRadius) return [];
+    return filteredEvents
+      .filter((e) => e.magnitude >= 4.0)
+      .map((e) => ({
+        id: `circle-${e.id}`,
+        center: { latitude: e.latitude, longitude: e.longitude },
+        radius: e.magnitude * 16000,
+        fillColor: 'rgba(240, 106, 53, 0.15)',
+        strokeColor: colors.seismicAccent,
+        strokeWidth: 1.5,
+      }));
+  }, [filteredEvents, showRadius, colors.seismicAccent]);
+
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 14) }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.backgroundPrimary} />
@@ -367,53 +395,26 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
       {/* 3. NATIVE MAP CONTAINER */}
       <View style={styles.mapContainer}>
         <MapErrorBoundary fallbackMessage="El mapa interactivo requiere soporte de servicios de localización. Los sismos recientes se listan abajo.">
-          <MapView
+          <AleraInteractiveMap
             ref={mapRef}
-            style={StyleSheet.absoluteFill}
             initialRegion={{
               latitude: userCoord ? userCoord.latitude : 4.5709,
               longitude: userCoord ? userCoord.longitude : -74.2973,
               latitudeDelta: 6.0,
               longitudeDelta: 6.0,
             }}
-            userInterfaceStyle={isDark ? 'dark' : 'light'}
-          >
-            {userCoord && (
-              <Marker coordinate={userCoord} title="Tu Ubicación Real">
-                <View style={styles.userLocationGpsDot} />
-              </Marker>
-            )}
-
-            {filteredEvents.map((e) => {
-              const magColor = getMagnitudeColor(e.magnitude);
-
-              return (
-                <React.Fragment key={e.id}>
-                  {/* Radio de Afectación Condicional */}
-                  {showRadius && e.magnitude >= 4.0 && (
-                    <Circle
-                      center={{ latitude: e.latitude, longitude: e.longitude }}
-                      radius={e.magnitude * 16000}
-                      fillColor="rgba(240, 106, 53, 0.15)"
-                      strokeColor={colors.seismicAccent}
-                      strokeWidth={1.5}
-                    />
-                  )}
-                  <Marker
-                    coordinate={{ latitude: e.latitude, longitude: e.longitude }}
-                    onPress={() => {
-                      setSelectedEventId(e.id);
-                      navigation.navigate('SeismicDetail', { event: e });
-                    }}
-                  >
-                    <View style={[styles.markerBadge, { backgroundColor: magColor }]}>
-                      <Text style={styles.markerText}>{e.magnitude.toFixed(1)} M</Text>
-                    </View>
-                  </Marker>
-                </React.Fragment>
-              );
-            })}
-          </MapView>
+            userCoord={userCoord}
+            markers={mapMarkers}
+            circles={mapCircles}
+            isDark={isDark}
+            onMarkerPress={(markerId) => {
+              const selected = filteredEvents.find((e) => e.id === markerId);
+              if (selected) {
+                setSelectedEventId(selected.id);
+                navigation.navigate('SeismicDetail', { event: selected });
+              }
+            }}
+          />
         </MapErrorBoundary>
 
         {/* Botón flotante: Mostrar / Ocultar Radio de Afectación */}
