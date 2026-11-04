@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, generateUUID } from './api';
 import { playEmergencySiren, SirenAlertType } from './sound';
@@ -30,6 +31,17 @@ try {
  */
 export async function setupNotificationChannelsAsync(): Promise<void> {
   if (Platform.OS === 'android') {
+    // En Expo Go (SDK 53+), ExpoNotificationChannelManager no tiene NotificationsChannelsProvider
+    // y arroja NullPointerException si se invoca. Se omite de forma segura en Expo Go
+    // y se activa plenamente en el APK / build de producción nativo.
+    const isExpoGo =
+      Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+      Constants.appOwnership === 'expo';
+
+    if (isExpoGo) {
+      return;
+    }
+
     try {
       await Notifications.setNotificationChannelAsync('alera_emergency_channel', {
         name: 'Alertas Criticas ALERA',
@@ -50,8 +62,8 @@ export async function setupNotificationChannelsAsync(): Promise<void> {
         enableVibrate: true,
         lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       });
-    } catch (err) {
-      console.warn('[ALERA PUSH] Canales de notificacion:', err);
+    } catch {
+      // Ignorar de forma segura si la versión del sistema operativo restringe canales
     }
   }
 }

@@ -1,6 +1,7 @@
-import { Vibration, Alert } from 'react-native';
+import { Vibration } from 'react-native';
+import { Asset } from 'expo-asset';
 
-// Cargador dinámico defensivo para expo-audio
+// Cargador defensivo para expo-audio
 let expoAudioModule: any = null;
 try {
   expoAudioModule = require('expo-audio');
@@ -11,8 +12,36 @@ try {
 let activePlayer: any = null;
 let isSirenActive = false;
 let autoCutoffTimer: ReturnType<typeof setTimeout> | null = null;
+let preloadedSoundUri: string | null = null;
 
 export type SirenAlertType = 'community' | 'seismic' | 'test';
+
+/**
+ * Precarga y descarga en almacenamiento local el audio de la sirena oficial de ALERA.
+ * Garantiza que el reproductor nativo (ExoPlayer en Android / AVPlayer en iOS)
+ * acceda de inmediato a un archivo local file:/// sin depender de descargas HTTP remotas ni túneles.
+ */
+async function getPreloadedSirenUri(): Promise<string | null> {
+  if (preloadedSoundUri) {
+    return preloadedSoundUri;
+  }
+
+  try {
+    const sirenAsset = Asset.fromModule(require('../../assets/sounds/emergency_siren.mp3'));
+    if (!sirenAsset.localUri) {
+      await sirenAsset.downloadAsync();
+    }
+    const resolvedUri = sirenAsset.localUri || sirenAsset.uri;
+    if (resolvedUri) {
+      preloadedSoundUri = resolvedUri;
+      return resolvedUri;
+    }
+  } catch (assetErr) {
+    console.warn('[ALERA SOUND] Error al precargar audio:', assetErr);
+  }
+
+  return null;
+}
 
 /**
  * Activa la sirena sismica oficial en bucle con vibracion haptica continua.
@@ -27,43 +56,59 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
   isSirenActive = true;
 
   try {
-    // 1. Patron de vibracion haptica controlada (sin bucle infinito para no trabar el hardware)
+    // 1. Patron de vibracion haptica controlada
     if (type === 'community') {
-      // 3 segundos de pulsos controlados sin repeticion infinita
       Vibration.vibrate([0, 500, 200, 500, 200, 500], false);
     } else if (type === 'seismic') {
-      // 5 segundos de pulsos intensos controlados sin repeticion infinita
       Vibration.vibrate([0, 800, 200, 800, 200, 800, 200, 800], false);
     } else {
-      // Modo prueba: pulso inicial controlado
-      Vibration.vibrate([0, 600, 200, 600, 200, 600], false);
+      Vibration.vibrate([0, 600, 200, 600, 200, 600], true);
     }
 
     // 2. Reproduccion acustica con expo-audio
     if (expoAudioModule) {
-      if (typeof expoAudioModule.setAudioModeAsync === 'function') {
-        await expoAudioModule.setAudioModeAsync({
-          playsInSilentMode: true,
-        });
+      try {
+        if (typeof expoAudioModule.setIsAudioActiveAsync === 'function') {
+          await expoAudioModule.setIsAudioActiveAsync(true);
+        }
+        if (typeof expoAudioModule.setAudioModeAsync === 'function') {
+          await expoAudioModule.setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
+            interruptionMode: 'duckOthers',
+          });
+        }
+      } catch (modeErr) {
+        console.warn('[ALERA SOUND] Ajuste de modo de audio diferido:', modeErr);
       }
 
       if (typeof expoAudioModule.createAudioPlayer === 'function') {
-        let soundSource: any;
-        try {
-          soundSource = require('../../assets/sounds/emergency_siren.mp3');
-        } catch {
-          soundSource = null;
-        }
+        const soundUri = await getPreloadedSirenUri();
 
-        if (soundSource) {
-          const player = expoAudioModule.createAudioPlayer(soundSource);
+        if (soundUri && isSirenActive) {
+          const player = expoAudioModule.createAudioPlayer({ uri: soundUri });
           player.loop = true;
+
           if (typeof player.setVolume === 'function') {
             player.setVolume(1.0);
           } else {
             player.volume = 1.0;
           }
+
+          // Iniciar reproduccion
           player.play();
+
+          // Respaldo reactivo: si el reproductor tarda en cargarse en memoria, re-activar play al estar listo
+          if (typeof player.addListener === 'function') {
+            player.addListener('playbackStatusUpdate', (status: any) => {
+              if (isSirenActive && status && !status.playing && status.isLoaded && !status.isBuffering) {
+                try {
+                  player.play();
+                } catch {}
+              }
+            });
+          }
+
           activePlayer = player;
         }
       }
@@ -71,35 +116,17 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
 
     // 3. Temporizador estricto de auto-apagado segun el tipo de evento
     if (type === 'community') {
-      // Protocolo comunitario: maximo 3 segundos
       autoCutoffTimer = setTimeout(() => {
         stopEmergencySiren();
       }, 3000);
     } else if (type === 'seismic') {
-      // Protocolo sismico: maximo 5 segundos
       autoCutoffTimer = setTimeout(() => {
         stopEmergencySiren();
       }, 5000);
     } else if (type === 'test') {
-      // En modo prueba se muestra la alerta modal de corte manual y seguro a 10s
       autoCutoffTimer = setTimeout(() => {
         stopEmergencySiren();
       }, 10000);
-
-      Alert.alert(
-        'PRUEBA DE SIRENA ALERA',
-        'Sirena acustica oficial y vibracion en ejecucion a volumen maximo.',
-        [
-          {
-            text: 'DETENER ALARMA',
-            style: 'destructive',
-            onPress: () => {
-              stopEmergencySiren();
-            },
-          },
-        ],
-        { cancelable: false }
-      );
     }
   } catch (error) {
     console.warn('[ALERA SOUND] Error al emitir sirena:', error);
@@ -124,8 +151,8 @@ export async function stopEmergencySiren(): Promise<void> {
       if (typeof activePlayer.pause === 'function') {
         activePlayer.pause();
       }
-      if (typeof activePlayer.release === 'function') {
-        activePlayer.release();
+      if (typeof activePlayer.remove === 'function') {
+        activePlayer.remove();
       }
       activePlayer = null;
     }
