@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useRef, useMemo, useEffect } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -53,7 +53,7 @@ export interface AleraInteractiveMapProps {
   showUserLocation?: boolean;
 }
 
-const deltaToZoom = (delta?: number): number => {
+export const deltaToZoom = (delta?: number): number => {
   if (!delta || delta <= 0) return 12;
   const zoom = Math.round(Math.log(360 / delta) / Math.LN2);
   return Math.min(18, Math.max(3, zoom));
@@ -78,53 +78,45 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
     ref
   ) => {
     const webViewRef = useRef<any>(null);
+    const isMapReadyRef = useRef<boolean>(false);
 
+    // Método imperativo para volar suavemente a una región
     useImperativeHandle(ref, () => ({
       animateToRegion: (targetRegion: MapRegion) => {
         const zoom = deltaToZoom(targetRegion.latitudeDelta);
-        const js = `if (window.map) { window.map.flyTo([${targetRegion.latitude}, ${targetRegion.longitude}], ${zoom}, { duration: 0.8 }); } true;`;
+        const js = `if (window.flyToRegion) { window.flyToRegion(${targetRegion.latitude}, ${targetRegion.longitude}, ${zoom}); } true;`;
         webViewRef.current?.injectJavaScript(js);
       },
     }));
 
-    // Actualización de región reactiva cuando cambia la prop region
+    // Sincronización reactiva cuando cambia la prop region
     useEffect(() => {
       if (region && region.latitude && region.longitude) {
         const zoom = deltaToZoom(region.latitudeDelta);
-        const js = `if (window.map) { window.map.setView([${region.latitude}, ${region.longitude}], ${zoom}); } true;`;
+        const js = `if (window.flyToRegion) { window.flyToRegion(${region.latitude}, ${region.longitude}, ${zoom}); } true;`;
         webViewRef.current?.injectJavaScript(js);
       }
     }, [region?.latitude, region?.longitude, region?.latitudeDelta]);
 
-    // Generar HTML autosuficiente para OpenStreetMap / CartoDB con Leaflet
-    const leafletHtml = useMemo(() => {
-      const activeCenter = (region && region.latitude) ? region : initialRegion;
-      const initialLat = activeCenter.latitude || 4.5709;
-      const initialLng = activeCenter.longitude || -74.2973;
-      const initialZoom = deltaToZoom(activeCenter.latitudeDelta);
-
-      // Capas de mapas de alta fidelidad, 100% libres de API keys y sin marcas de agua:
-      // Modo Claro: ESRI World Street Map (relieve, calles, ciudades nítidas sin marcas)
-      // Modo Oscuro: ESRI World Dark Gray Canvas
-      const tileUrl = isDark
-        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
-        : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
-      const fallbackTileUrl = 'https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
-
-      const markersJson = JSON.stringify(
+    // Serialización limpia de marcadores para inyección sin recargar HTML
+    const serializedMarkers = useMemo(() => {
+      return JSON.stringify(
         markers.map((m) => ({
           id: m.id,
           lat: m.coordinate.latitude,
           lng: m.coordinate.longitude,
-          badgeText: m.badgeText,
+          badgeText: m.badgeText || '',
           badgeColor: m.badgeColor || '#F06A35',
           title: m.title || '',
           desc: m.description || '',
-          iconName: m.iconName,
+          iconName: m.iconName || 'badge',
         }))
       );
+    }, [markers]);
 
-      const circlesJson = JSON.stringify(
+    // Serialización limpia de círculos de afectación
+    const serializedCircles = useMemo(() => {
+      return JSON.stringify(
         circles.map((c) => ({
           lat: c.center.latitude,
           lng: c.center.longitude,
@@ -134,14 +126,45 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
           strokeWidth: c.strokeWidth || 1.5,
         }))
       );
+    }, [circles]);
 
-      const userCoordJson = userCoord && showUserLocation
-        ? JSON.stringify({ lat: userCoord.latitude, lng: userCoord.longitude })
-        : 'null';
+    // Inyección en vivo de marcadores en el mapa Leaflet (sin refrescar página)
+    useEffect(() => {
+      if (isMapReadyRef.current) {
+        const js = `if (window.setMarkers) { window.setMarkers(${serializedMarkers}); } true;`;
+        webViewRef.current?.injectJavaScript(js);
+      }
+    }, [serializedMarkers]);
 
-      const pinJson = draggablePin
-        ? JSON.stringify({ lat: draggablePin.latitude, lng: draggablePin.longitude })
-        : 'null';
+    // Inyección en vivo de círculos en el mapa Leaflet
+    useEffect(() => {
+      if (isMapReadyRef.current) {
+        const js = `if (window.setCircles) { window.setCircles(${serializedCircles}); } true;`;
+        webViewRef.current?.injectJavaScript(js);
+      }
+    }, [serializedCircles]);
+
+    // Inyección en vivo de coordenada de usuario
+    useEffect(() => {
+      if (isMapReadyRef.current) {
+        const coordData = userCoord && showUserLocation
+          ? JSON.stringify({ lat: userCoord.latitude, lng: userCoord.longitude })
+          : 'null';
+        const js = `if (window.setUserCoord) { window.setUserCoord(${coordData}); } true;`;
+        webViewRef.current?.injectJavaScript(js);
+      }
+    }, [userCoord?.latitude, userCoord?.longitude, showUserLocation]);
+
+    // HTML autosuficiente memoizado únicamente por tema (se carga UNA sola vez)
+    const leafletHtml = useMemo(() => {
+      const initialLat = initialRegion.latitude || 4.5709;
+      const initialLng = initialRegion.longitude || -74.2973;
+      const initialZoom = deltaToZoom(initialRegion.latitudeDelta);
+
+      const tileUrl = isDark
+        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+        : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+      const fallbackTileUrl = 'https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
 
       return `<!DOCTYPE html>
 <html>
@@ -164,12 +187,30 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
       color: #FFFFFF;
       font-weight: 700;
       font-size: 11px;
-      font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       box-shadow: 0 2px 8px rgba(0,0,0,0.45);
       border: 1.5px solid rgba(255,255,255,0.95);
       cursor: pointer;
       transform: translate(-50%, -50%);
       white-space: nowrap;
+    }
+
+    .city-search-pin {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #2563EB;
+      color: #FFFFFF;
+      padding: 4px 9px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      box-shadow: 0 3px 10px rgba(37, 99, 235, 0.5);
+      border: 1.8px solid #FFFFFF;
+      white-space: nowrap;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
     }
 
     .user-pulse-dot {
@@ -235,7 +276,6 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
         });
         window.map = map;
 
-        // Capa de mapas satélite/relieve libre (ESRI / OpenStreetMap HOT) sin marcas ni API keys
         var primaryTile = L.tileLayer('${tileUrl}', {
           maxZoom: 19,
           attribution: ''
@@ -248,83 +288,76 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
           }
         });
 
-        var markersLayer = L.layerGroup().addTo(map);
-        var circlesLayer = L.layerGroup().addTo(map);
-        var userLayer = L.layerGroup().addTo(map);
-        var pinLayer = L.layerGroup().addTo(map);
+        window.circlesLayer = L.layerGroup().addTo(map);
+        window.markersLayer = L.layerGroup().addTo(map);
+        window.userLayer = L.layerGroup().addTo(map);
+        window.pinLayer = L.layerGroup().addTo(map);
 
-        // Dibujar Círculos de Afectación Sísmica
-        var circles = ${circlesJson};
-        circles.forEach(function(c) {
-          L.circle([c.lat, c.lng], {
-            radius: c.radius,
-            fillColor: c.fillColor || 'rgba(240, 106, 53, 0.15)',
-            fillOpacity: 0.25,
-            color: c.strokeColor || '#F06A35',
-            weight: c.strokeWidth || 1.5
-          }).addTo(circlesLayer);
-        });
+        // Funciones de actualización dinámica en tiempo real
+        window.setMarkers = function(markersList) {
+          if (!window.map || !window.markersLayer) return;
+          window.markersLayer.clearLayers();
+          markersList.forEach(function(m) {
+            var iconHtml = '';
+            if (m.iconName === 'pin') {
+              iconHtml = '<div class="city-search-pin">📍 ' + m.badgeText + '</div>';
+            } else if (m.badgeText) {
+              iconHtml = '<div class="mag-badge" style="background-color: ' + (m.badgeColor || '#F06A35') + ';">' + m.badgeText + '</div>';
+            } else {
+              iconHtml = '<div class="incident-badge">!</div>';
+            }
+            var customIcon = L.divIcon({
+              className: 'custom-leaflet-icon',
+              html: iconHtml,
+              iconSize: [0, 0]
+            });
+            var marker = L.marker([m.lat, m.lng], { icon: customIcon }).addTo(window.markersLayer);
+            marker.on('click', function() {
+              sendToNative({ type: 'MARKER_PRESS', id: m.id });
+            });
+          });
+        };
 
-        // Dibujar Marcadores de Sismos
-        var markers = ${markersJson};
-        markers.forEach(function(m) {
-          var iconHtml = '';
-          if (m.badgeText) {
-            iconHtml = '<div class="mag-badge" style="background-color: ' + (m.badgeColor || '#F06A35') + ';">' + m.badgeText + '</div>';
-          } else {
-            iconHtml = '<div class="incident-badge">!</div>';
+        window.setCircles = function(circlesList) {
+          if (!window.map || !window.circlesLayer) return;
+          window.circlesLayer.clearLayers();
+          circlesList.forEach(function(c) {
+            L.circle([c.lat, c.lng], {
+              radius: c.radius,
+              fillColor: c.fillColor || 'rgba(240, 106, 53, 0.15)',
+              fillOpacity: 0.25,
+              color: c.strokeColor || '#F06A35',
+              weight: c.strokeWidth || 1.5
+            }).addTo(window.circlesLayer);
+          });
+        };
+
+        window.setUserCoord = function(coord) {
+          if (!window.map || !window.userLayer) return;
+          window.userLayer.clearLayers();
+          if (coord && coord.lat && coord.lng) {
+            var userIcon = L.divIcon({
+              className: 'user-icon-wrapper',
+              html: '<div class="user-pulse-dot"></div>',
+              iconSize: [0, 0]
+            });
+            L.marker([coord.lat, coord.lng], { icon: userIcon, interactive: false }).addTo(window.userLayer);
           }
-          var customIcon = L.divIcon({
-            className: 'custom-leaflet-icon',
-            html: iconHtml,
-            iconSize: [0, 0]
-          });
+        };
 
-          var marker = L.marker([m.lat, m.lng], { icon: customIcon }).addTo(markersLayer);
-          marker.on('click', function() {
-            sendToNative({ type: 'MARKER_PRESS', id: m.id });
-          });
-        });
+        window.flyToRegion = function(lat, lng, zoom) {
+          if (!window.map) return;
+          window.map.flyTo([lat, lng], zoom, { duration: 0.9 });
+        };
 
-        // Dibujar Ubicación GPS Usuario
-        var userCoord = ${userCoordJson};
-        if (userCoord) {
-          var userIcon = L.divIcon({
-            className: 'user-icon-wrapper',
-            html: '<div class="user-pulse-dot"></div>',
-            iconSize: [0, 0]
-          });
-          L.marker([userCoord.lat, userCoord.lng], { icon: userIcon, interactive: false }).addTo(userLayer);
-        }
-
-        // Dibujar Pin Arrastrable para Reportes
-        var pin = ${pinJson};
-        if (pin) {
-          var pinIcon = L.divIcon({
-            className: 'pin-icon-wrapper',
-            html: '<svg class="draggable-pin" viewBox="0 0 24 24" fill="#F06A35" stroke="#FFFFFF" stroke-width="1.5"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
-            iconSize: [0, 0]
-          });
-          var pinMarker = L.marker([pin.lat, pin.lng], {
-            icon: pinIcon,
-            draggable: true
-          }).addTo(pinLayer);
-
-          pinMarker.on('dragend', function(e) {
-            var pos = e.target.getLatLng();
-            sendToNative({ type: 'PIN_CHANGE', latitude: pos.lat, longitude: pos.lng });
-          });
-        }
-
-        // Capturar Clic en el Mapa
         map.on('click', function(e) {
           sendToNative({ type: 'MAP_CLICK', latitude: e.latlng.lat, longitude: e.latlng.lng });
         });
 
-        // Forzar cálculo de tamaño de azulejos
-        setTimeout(function() { map.invalidateSize(); }, 60);
+        setTimeout(function() { map.invalidateSize(); }, 80);
         setTimeout(function() { map.invalidateSize(); }, 300);
-        setTimeout(function() { map.invalidateSize(); }, 1000);
+
+        sendToNative({ type: 'MAP_READY' });
       } catch (err) {
         console.error(err);
       }
@@ -340,12 +373,22 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
   </script>
 </body>
 </html>`;
-    }, [isDark, markers, circles, userCoord, draggablePin, showUserLocation, initialRegion, region]);
+    }, [isDark]);
 
     const handleWebViewMessage = (event: any) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
-        if (data.type === 'MARKER_PRESS') {
+        if (data.type === 'MAP_READY') {
+          isMapReadyRef.current = true;
+          // Inyectar datos iniciales inmediatamente al estar listo Leaflet
+          const syncJs = `
+            if (window.setMarkers) window.setMarkers(${serializedMarkers});
+            if (window.setCircles) window.setCircles(${serializedCircles});
+            if (window.setUserCoord) window.setUserCoord(${userCoord ? JSON.stringify({ lat: userCoord.latitude, lng: userCoord.longitude }) : 'null'});
+            true;
+          `;
+          webViewRef.current?.injectJavaScript(syncJs);
+        } else if (data.type === 'MARKER_PRESS') {
           if (onMarkerPress) {
             onMarkerPress(data.id);
           } else {

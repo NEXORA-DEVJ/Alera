@@ -307,10 +307,10 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   // Buscador de municipios de Colombia con soporte para tildes y sin tildes
-  const handleSearchCity = async () => {
-    const raw = searchQuery.trim();
+  const handleSearchCity = async (textOverride?: string) => {
+    const raw = (textOverride !== undefined ? textOverride : searchQuery).trim();
     if (!raw) {
-      setSearchedCity(null);
+      handleClearSearch();
       return;
     }
 
@@ -344,11 +344,12 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
       if (targetLat !== null && targetLon !== null) {
         setSearchedCity({ latitude: targetLat, longitude: targetLon, name: targetName });
 
+        // Centrar suavemente en la ciudad con zoom ideal (delta 0.6 = zoom 9.2 para abarcar municipio y fallas cercanas)
         mapRef.current?.animateToRegion({
           latitude: targetLat,
           longitude: targetLon,
-          latitudeDelta: 1.5,
-          longitudeDelta: 1.5,
+          latitudeDelta: 0.6,
+          longitudeDelta: 0.6,
         });
       }
     } catch {
@@ -358,9 +359,44 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const handleSearchInputChange = (text: string) => {
+    setSearchQuery(text);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setSearchedCity(null);
+      return;
+    }
+    const clean = normalizeSearchText(trimmed);
+    if (COLOMBIAN_CITIES[clean]) {
+      const city = COLOMBIAN_CITIES[clean];
+      setSearchedCity({ latitude: city.lat, longitude: city.lon, name: city.name });
+      mapRef.current?.animateToRegion({
+        latitude: city.lat,
+        longitude: city.lon,
+        latitudeDelta: 0.6,
+        longitudeDelta: 0.6,
+      });
+    }
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchedCity(null);
+    if (userCoord) {
+      mapRef.current?.animateToRegion({
+        latitude: userCoord.latitude,
+        longitude: userCoord.longitude,
+        latitudeDelta: 2.5,
+        longitudeDelta: 2.5,
+      });
+    } else {
+      mapRef.current?.animateToRegion({
+        latitude: 4.5709,
+        longitude: -74.2973,
+        latitudeDelta: 6.0,
+        longitudeDelta: 6.0,
+      });
+    }
   };
 
   const getMagnitudeColor = (mag: number): string => {
@@ -412,7 +448,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
   }, [events, searchQuery, timeFilter, searchedCity]);
 
   const mapMarkers = useMemo(() => {
-    return filteredEvents.map((e) => ({
+    const list: any[] = filteredEvents.map((e) => ({
       id: e.id,
       coordinate: { latitude: e.latitude, longitude: e.longitude },
       badgeText: `${e.magnitude.toFixed(1)} M`,
@@ -423,7 +459,21 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         navigation.navigate('SeismicDetail', { event: e });
       },
     }));
-  }, [filteredEvents]);
+
+    // Si hay una ciudad buscada, agregar pin distintivo en el mapa para ubicar la ciudad
+    if (searchedCity) {
+      list.unshift({
+        id: `searched-city-${searchedCity.name}`,
+        coordinate: { latitude: searchedCity.latitude, longitude: searchedCity.longitude },
+        badgeText: searchedCity.name,
+        badgeColor: colors.gpsBlue,
+        iconName: 'pin',
+        title: `Municipio buscado: ${searchedCity.name}`,
+      });
+    }
+
+    return list;
+  }, [filteredEvents, searchedCity, colors.gpsBlue]);
 
   // Circulos de afectacion sismica: visibles desde 3.0 M y para el sismo seleccionado
   const mapCircles = useMemo(() => {
@@ -484,11 +534,8 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
             placeholder="Buscar municipio o ciudad de Colombia..."
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              if (!text.trim()) setSearchedCity(null);
-            }}
-            onSubmitEditing={handleSearchCity}
+            onChangeText={handleSearchInputChange}
+            onSubmitEditing={() => handleSearchCity()}
             returnKeyType="search"
           />
           {searchQuery.length > 0 ? (
@@ -499,7 +546,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
           {searchingCity ? (
             <ActivityIndicator size="small" color={colors.seismicAccent} />
           ) : (
-            <TouchableOpacity activeOpacity={0.7} onPress={handleSearchCity}>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => handleSearchCity()}>
               <SlidersHorizontal size={18} color={colors.textSecondary} strokeWidth={1.8} />
             </TouchableOpacity>
           )}
@@ -518,6 +565,12 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                 latitudeDelta: 6.0,
                 longitudeDelta: 6.0,
               }}
+              region={searchedCity ? {
+                latitude: searchedCity.latitude,
+                longitude: searchedCity.longitude,
+                latitudeDelta: 0.6,
+                longitudeDelta: 0.6,
+              } : undefined}
               userCoord={userCoord}
               markers={mapMarkers}
               circles={mapCircles}
@@ -577,76 +630,141 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
 
       {/* 4. SECCION INFERIOR UNIFICADA: FILTROS + SISMOS RECIENTES */}
       <View style={styles.eventsSection}>
-        {/* Cabecera con titulo, filtros temporales y boton Ver Lista ampliado */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>
-              {searchedCity ? `CERCA DE ${searchedCity.name.toUpperCase()}` : 'SISMOS RECIENTES'}
-            </Text>
-            {searchedCity ? (
-              <TouchableOpacity
-                style={styles.clearSearchBadge}
-                onPress={handleClearSearch}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.clearSearchBadgeText}>Quitar x</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+        {/* Cabecera adaptativa: 2 filas limpias al buscar ciudad para eliminar cualquier colision */}
+        <View style={styles.sectionHeaderContainer}>
+          {searchedCity ? (
+            <View style={styles.searchActiveHeader}>
+              <View style={styles.searchActiveTitleRow}>
+                <View style={styles.searchCityBadgeRow}>
+                  <MapPin size={13} color={colors.seismicAccent} strokeWidth={2.4} />
+                  <Text style={styles.sectionTitle} numberOfLines={1}>
+                    CERCA DE {searchedCity.name.toUpperCase()}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.clearSearchBadge}
+                  onPress={handleClearSearch}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={11} color={colors.seismicAccent} strokeWidth={2.5} />
+                  <Text style={styles.clearSearchBadgeText}>Quitar filtro</Text>
+                </TouchableOpacity>
+              </View>
 
-          {/* Filtros Hoy vs Todos y Enlace Ver Lista con flecha ampliada */}
-          <View style={styles.filterControlsRow}>
-            <TouchableOpacity
-              style={[
-                styles.timeFilterChip,
-                timeFilter === 'TODAY' && styles.timeFilterChipActive,
-              ]}
-              onPress={() => setTimeFilter('TODAY')}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.timeFilterDot,
-                  { backgroundColor: timeFilter === 'TODAY' ? colors.seismicAccent : colors.textMuted },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.timeFilterText,
-                  timeFilter === 'TODAY' && styles.timeFilterTextActive,
-                ]}
-              >
-                Hoy: {todayEventsCount}
-              </Text>
-            </TouchableOpacity>
+              <View style={styles.searchActiveFiltersRow}>
+                <View style={styles.timeFilterGroup}>
+                  <TouchableOpacity
+                    style={[
+                      styles.timeFilterChip,
+                      timeFilter === 'TODAY' && styles.timeFilterChipActive,
+                    ]}
+                    onPress={() => setTimeFilter('TODAY')}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.timeFilterDot,
+                        { backgroundColor: timeFilter === 'TODAY' ? colors.seismicAccent : colors.textMuted },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.timeFilterText,
+                        timeFilter === 'TODAY' && styles.timeFilterTextActive,
+                      ]}
+                    >
+                      Hoy: {todayEventsCount}
+                    </Text>
+                  </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.timeFilterChip,
-                timeFilter === 'ALL' && styles.timeFilterChipActive,
-              ]}
-              onPress={() => setTimeFilter('ALL')}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.timeFilterText,
-                  timeFilter === 'ALL' && styles.timeFilterTextActive,
-                ]}
-              >
-                Todos ({events.length})
-              </Text>
-            </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.timeFilterChip,
+                      timeFilter === 'ALL' && styles.timeFilterChipActive,
+                    ]}
+                    onPress={() => setTimeFilter('ALL')}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.timeFilterText,
+                        timeFilter === 'ALL' && styles.timeFilterChipActive,
+                      ]}
+                    >
+                      Todos ({events.length})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
-            <TouchableOpacity
-              style={styles.historyLinkButtonLarge}
-              onPress={() => navigation.navigate('SeismicList')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.historyLinkTextLarge}>Lista</Text>
-              <ChevronRight size={17} color={colors.seismicAccent} strokeWidth={2.4} />
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity
+                  style={styles.historyLinkButtonLarge}
+                  onPress={() => navigation.navigate('SeismicList')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.historyLinkTextLarge}>Lista</Text>
+                  <ChevronRight size={17} color={colors.seismicAccent} strokeWidth={2.4} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>SISMOS RECIENTES</Text>
+
+              <View style={styles.filterControlsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.timeFilterChip,
+                    timeFilter === 'TODAY' && styles.timeFilterChipActive,
+                  ]}
+                  onPress={() => setTimeFilter('TODAY')}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.timeFilterDot,
+                      { backgroundColor: timeFilter === 'TODAY' ? colors.seismicAccent : colors.textMuted },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.timeFilterText,
+                      timeFilter === 'TODAY' && styles.timeFilterTextActive,
+                    ]}
+                  >
+                    Hoy: {todayEventsCount}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.timeFilterChip,
+                    timeFilter === 'ALL' && styles.timeFilterChipActive,
+                  ]}
+                  onPress={() => setTimeFilter('ALL')}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.timeFilterText,
+                      timeFilter === 'ALL' && styles.timeFilterChipActive,
+                    ]}
+                  >
+                    Todos ({events.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.historyLinkButtonLarge}
+                  onPress={() => navigation.navigate('SeismicList')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.historyLinkTextLarge}>Lista</Text>
+                  <ChevronRight size={17} color={colors.seismicAccent} strokeWidth={2.4} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
 
         {loading ? (
@@ -874,19 +992,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       marginTop: 8,
       paddingBottom: 2,
     },
+    sectionHeaderContainer: {
+      paddingHorizontal: 18,
+      marginBottom: 8,
+    },
     sectionHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 18,
-      marginBottom: 8,
-      flexWrap: 'nowrap',
-    },
-    sectionTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      flex: 1,
     },
     sectionTitle: {
       fontSize: 11,
@@ -894,15 +1007,45 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textSecondary,
       letterSpacing: 0.6,
     },
+    searchActiveHeader: {
+      gap: 8,
+    },
+    searchActiveTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    searchCityBadgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      flex: 1,
+      marginRight: 8,
+    },
+    searchActiveFiltersRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    timeFilterGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
     clearSearchBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
       backgroundColor: isDark ? '#261710' : '#FFEDD5',
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(240, 106, 53, 0.4)' : 'rgba(240, 106, 53, 0.3)',
     },
     clearSearchBadgeText: {
       fontSize: 10,
-      fontWeight: '700',
+      fontWeight: '800',
       color: colors.seismicAccent,
     },
     filterControlsRow: {
