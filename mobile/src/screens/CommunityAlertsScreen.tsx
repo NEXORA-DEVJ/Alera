@@ -391,7 +391,19 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       acquireLocationAndLoad();
-    }, [deviceId])
+
+      // Polling en pantalla: refresca la lista cada 45 s mientras el usuario
+      // está en esta pantalla. Permite ver nuevos incidentes sin salir y volver.
+      const screenPollTimer = setInterval(() => {
+        if (userLocation) {
+          loadIncidents(userLocation.latitude, userLocation.longitude, true);
+        }
+      }, 45_000);
+
+      return () => {
+        clearInterval(screenPollTimer);
+      };
+    }, [deviceId, userLocation])
   );
 
   const acquireLocationAndLoad = async (): Promise<void> => {

@@ -13,6 +13,10 @@ import {
 import { SirenAlertType } from './src/services/sound';
 import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
 import { registerBackgroundSeismicTask } from './src/services/backgroundTask';
+import {
+  startCommunityAlertMonitoring,
+  stopCommunityAlertMonitoring,
+} from './src/services/communityAlertMonitor';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateUUID } from './src/services/api';
 import * as Notifications from 'expo-notifications';
@@ -41,7 +45,18 @@ function MainApp() {
       console.warn('[ALERA BG] No se pudo registrar tarea de fondo:', err);
     });
 
-    // 4. Escuchador reactivo de notificaciones push (mientras la app esta abierta)
+    // 4. Iniciar monitor de alertas comunitarias en primer plano (funciona en CUALQUIER pantalla)
+    // Polling cada 60 s: detecta incidentes a ≤1500 m y dispara notificacion local
+    AsyncStorage.getItem('@alera_device_id')
+      .then((id) => {
+        const devId = id && id.length === 36 ? id : generateUUID();
+        startCommunityAlertMonitoring(devId);
+      })
+      .catch(() => {
+        startCommunityAlertMonitoring('');
+      });
+
+    // 5. Escuchador reactivo de notificaciones push (mientras la app esta abierta)
     let subscription: Notifications.Subscription | null = null;
     try {
       subscription = Notifications.addNotificationReceivedListener((notification) => {
@@ -75,7 +90,7 @@ function MainApp() {
       console.warn('[ALERA] No se pudo inicializar listener de notificaciones:', subErr);
     }
 
-    // 5. Escuchador de toque en notificacion (usuario abre la app desde la bandeja)
+    // 6. Escuchador de toque en notificacion (usuario abre la app desde la bandeja)
     let tapSubscription: Notifications.Subscription | null = null;
     try {
       tapSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -90,6 +105,7 @@ function MainApp() {
       subscription?.remove();
       tapSubscription?.remove();
       stopContinuousLocationTracking();
+      stopCommunityAlertMonitoring();
       // No se detiene la sirena ni las notificaciones al minimizar la app.
       // La tarea de segundo plano sigue corriendo por su cuenta.
     };
