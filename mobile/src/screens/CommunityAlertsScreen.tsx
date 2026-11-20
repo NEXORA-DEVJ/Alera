@@ -489,7 +489,8 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
       `Estás a ${formatDistance(hazard.distanceMeters)} del incidente. ${hazard.incident.description || ''}`,
       true,
       'community',
-      `Radio: ${formatDistance(hazard.incident.radiusMeters)}`
+      `Radio: ${formatDistance(hazard.incident.radiusMeters)}`,
+      false
     );
   };
 

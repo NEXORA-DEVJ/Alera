@@ -59,6 +59,12 @@ function MainApp() {
             return;
           }
 
+          // Desduplicación estricta: registrar de inmediato el incidente para que
+          // ninguna otra vista vuelva a disparar una segunda alerta para el mismo evento
+          if (data.incidentId) {
+            markIncidentAsAlerted(data.incidentId);
+          }
+
           const rawTitle = content.title || 'ALERTA ALERA';
           const body = content.body || '';
           const titleUpper = rawTitle.toUpperCase();

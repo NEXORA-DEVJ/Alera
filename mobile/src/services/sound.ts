@@ -9,10 +9,12 @@ try {
   console.warn('[ALERA SOUND] expo-audio no disponible:', err);
 }
 
-let activePlayer: any = null;
+// Conjunto de todos los reproductores creados para garantizar que NINGUNO quede huérfano
+const activePlayers = new Set<any>();
 let isSirenActive = false;
 let autoCutoffTimer: ReturnType<typeof setTimeout> | null = null;
 let preloadedSoundUri: string | null = null;
+let lastSirenStartTime = 0;
 
 export type SirenAlertType = 'community' | 'seismic' | 'test';
 
@@ -44,19 +46,27 @@ async function getPreloadedSirenUri(): Promise<string | null> {
 }
 
 /**
- * Activa la sirena sismica oficial en bucle con vibracion haptica continua.
- * Controla con precision la duracion segun el protocolo oficial de ALERA:
- * - Alerta Comunitaria: maximo 3 segundos.
- * - Alerta Sismica: maximo 5 segundos.
- * - Modo Prueba: bucle continuo con boton de apagado manual y seguro a 10s.
+ * Activa la sirena sísmica oficial con vibración háptica controlada.
+ * Protocolo de duración estricta ALERA:
+ * - Alerta Comunitaria: máximo 3 segundos.
+ * - Alerta Sísmica: máximo 5 segundos.
+ * - Modo Prueba: máximo 10 segundos.
  */
 export async function playEmergencySiren(type: SirenAlertType = 'community'): Promise<void> {
-  // Limpiar cualquier reproduccion o temporizador previo
+  const now = Date.now();
+  // Anti-rebote: si ya está sonando una sirena hace menos de 2.5 segundos,
+  // no reiniciar ni sobreponer otro reproductor para evitar choques acústicos
+  if (isSirenActive && now - lastSirenStartTime < 2500) {
+    return;
+  }
+  lastSirenStartTime = now;
+
+  // Detener y liberar absolutamente todos los reproductores previos
   await stopEmergencySiren();
   isSirenActive = true;
 
   try {
-    // 1. Patron de vibracion haptica controlada
+    // 1. Patrón de vibración háptica controlada
     if (type === 'community') {
       Vibration.vibrate([0, 500, 200, 500, 200, 500], false);
     } else if (type === 'seismic') {
@@ -65,7 +75,7 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
       Vibration.vibrate([0, 600, 200, 600, 200, 600], true);
     }
 
-    // 2. Reproduccion acustica con expo-audio
+    // 2. Reproducción acústica con expo-audio
     if (expoAudioModule) {
       try {
         if (typeof expoAudioModule.setIsAudioActiveAsync === 'function') {
@@ -79,12 +89,13 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
           });
         }
       } catch (modeErr) {
-        console.warn('[ALERA SOUND] Ajuste de modo de audio diferido:', modeErr);
+        console.warn('[ALERA SOUND] Ajuste de modo de audio:', modeErr);
       }
 
       if (typeof expoAudioModule.createAudioPlayer === 'function') {
         const soundUri = await getPreloadedSirenUri();
 
+        // Verificar que la sirena no haya sido cancelada mientras resolvía el archivo
         if (soundUri && isSirenActive) {
           const player = expoAudioModule.createAudioPlayer({ uri: soundUri });
           player.loop = true;
@@ -95,39 +106,17 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
             player.volume = 1.0;
           }
 
-          // Iniciar reproduccion
+          activePlayers.add(player);
           player.play();
-
-          // Respaldo reactivo: si el reproductor tarda en cargarse en memoria, re-activar play al estar listo
-          if (typeof player.addListener === 'function') {
-            player.addListener('playbackStatusUpdate', (status: any) => {
-              if (isSirenActive && status && !status.playing && status.isLoaded && !status.isBuffering) {
-                try {
-                  player.play();
-                } catch {}
-              }
-            });
-          }
-
-          activePlayer = player;
         }
       }
     }
 
-    // 3. Temporizador estricto de auto-apagado segun el tipo de evento
-    if (type === 'community') {
-      autoCutoffTimer = setTimeout(() => {
-        stopEmergencySiren();
-      }, 3000);
-    } else if (type === 'seismic') {
-      autoCutoffTimer = setTimeout(() => {
-        stopEmergencySiren();
-      }, 5000);
-    } else if (type === 'test') {
-      autoCutoffTimer = setTimeout(() => {
-        stopEmergencySiren();
-      }, 10000);
-    }
+    // 3. Temporizador estricto de auto-apagado con corte garantizado
+    const durationMs = type === 'community' ? 3000 : type === 'seismic' ? 5000 : 10000;
+    autoCutoffTimer = setTimeout(() => {
+      stopEmergencySiren();
+    }, durationMs);
   } catch (error) {
     console.warn('[ALERA SOUND] Error al emitir sirena:', error);
     await stopEmergencySiren();
@@ -135,7 +124,7 @@ export async function playEmergencySiren(type: SirenAlertType = 'community'): Pr
 }
 
 /**
- * Detiene inmediatamente la sirena sonora, cancela la vibracion y limpia timers.
+ * Detiene inmediatamente la sirena sonora, cancela la vibración y libera todos los reproductores.
  */
 export async function stopEmergencySiren(): Promise<void> {
   isSirenActive = false;
@@ -147,15 +136,19 @@ export async function stopEmergencySiren(): Promise<void> {
 
   try {
     Vibration.cancel();
-    if (activePlayer) {
-      if (typeof activePlayer.pause === 'function') {
-        activePlayer.pause();
-      }
-      if (typeof activePlayer.remove === 'function') {
-        activePlayer.remove();
-      }
-      activePlayer = null;
+
+    // Detener y liberar TODOS los reproductores registrados
+    for (const player of activePlayers) {
+      try {
+        if (typeof player.pause === 'function') {
+          player.pause();
+        }
+        if (typeof player.remove === 'function') {
+          player.remove();
+        }
+      } catch {}
     }
+    activePlayers.clear();
   } catch (error) {
     console.warn('[ALERA SOUND] Error al detener sirena:', error);
   }
