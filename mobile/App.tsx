@@ -14,7 +14,11 @@ import {
   markIncidentAsAlerted,
 } from './src/services/notifications';
 import { SirenAlertType } from './src/services/sound';
-import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
+import {
+  startContinuousLocationTracking,
+  stopContinuousLocationTracking,
+  getRealDeviceLocation,
+} from './src/services/location';
 import { registerBackgroundSeismicTask } from './src/services/backgroundTask';
 import { emitCommunityAlert } from './src/services/communityAlertEvents';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,20 +29,30 @@ function MainApp() {
   const { colors, isDark } = useTheme();
 
   useEffect(() => {
-    // 1. Registro seguro de notificaciones push
-    registerForPushNotificationsAsync().catch((err) => {
-      console.warn('[ALERA] Error en registro de notificaciones:', err);
-    });
+    // 1. Inicialización secuencial y consistente de dispositivo y GPS:
+    // Garantiza que el backend conozca el deviceId exacto y su ubicación GPS desde el primer segundo
+    const initDeviceAndTracking = async () => {
+      try {
+        await registerForPushNotificationsAsync();
 
-    // 2. Iniciar rastreo seguro de coordenadas para el backend
-    AsyncStorage.getItem('@alera_device_id')
-      .then((id) => {
-        const devId = id && id.length === 36 ? id : generateUUID();
-        return startContinuousLocationTracking(devId);
-      })
-      .catch((err) => {
-        console.warn('[ALERA] Error en inicializacion de GPS:', err);
-      });
+        let devId = await AsyncStorage.getItem('@alera_device_id');
+        if (!devId || devId.length !== 36) {
+          devId = generateUUID();
+          await AsyncStorage.setItem('@alera_device_id', devId);
+        }
+
+        const loc = await getRealDeviceLocation(devId);
+        if (loc) {
+          await api.updateLocation(devId, loc.latitude, loc.longitude).catch(() => {});
+        }
+
+        await startContinuousLocationTracking(devId);
+      } catch (err) {
+        console.warn('[ALERA] Error en inicialización de dispositivo y GPS:', err);
+      }
+    };
+
+    initDeviceAndTracking();
 
     // 3. Registrar tarea de segundo plano para alertas sismicas (funciona aunque la app este cerrada)
     registerBackgroundSeismicTask().catch((err) => {
@@ -104,28 +118,36 @@ function MainApp() {
       });
     } catch {}
 
-    // 6. Puente de pruebas EXCLUSIVO para Android en Expo Go (SDK 53):
-    // Como Expo Go en Android eliminó el soporte de push remoto en SDK 53,
-    // este puente permite recibir las alertas comunitarias en Android durante pruebas en Expo Go
-    // aunque el usuario esté en la pestaña de Sismos o Perfil.
-    // En iPhone y en el APK de producción este bloque NO corre (usan Push 100% nativo).
-    let expoGoAndroidTimer: ReturnType<typeof setInterval> | null = null;
-    const isExpoGoAndroid =
-      Platform.OS === 'android' &&
-      (Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-       (Constants as any).appOwnership === 'expo');
+    // 6. Puente de pruebas para Expo Go (iOS y Android):
+    // Garantiza que en entornos de pruebas con Expo Go (donde las notificaciones push de Apple/Google
+    // pueden requerir login o tener cola/latencia en servidores de Expo), cualquier dispositivo
+    // (iPhone adicional, Android, simulador) reciba la alerta comunitaria de inmediato
+    // sin importar si está en la pestaña de Sismos, Perfil o Alertas Comunitarias.
+    let expoGoBridgeTimer: ReturnType<typeof setInterval> | null = null;
+    const isExpoGo =
+      Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+      (Constants as any).appOwnership === 'expo';
 
-    if (isExpoGoAndroid) {
+    if (isExpoGo) {
       const checkNearbyIncidentsExpoGo = async () => {
         try {
-          const [latStr, lonStr, devId] = await Promise.all([
+          let [latStr, lonStr, devId] = await Promise.all([
             AsyncStorage.getItem('@alera_last_lat'),
             AsyncStorage.getItem('@alera_last_lon'),
             AsyncStorage.getItem('@alera_device_id'),
           ]);
-          if (!latStr || !lonStr) return;
-          const lat = parseFloat(latStr);
-          const lon = parseFloat(lonStr);
+
+          let lat = latStr ? parseFloat(latStr) : NaN;
+          let lon = lonStr ? parseFloat(lonStr) : NaN;
+
+          if (isNaN(lat) || isNaN(lon)) {
+            const loc = await getRealDeviceLocation();
+            if (loc) {
+              lat = loc.latitude;
+              lon = loc.longitude;
+            }
+          }
+
           if (isNaN(lat) || isNaN(lon)) return;
 
           const incidents = await api.getNearbyCommunityIncidents(lat, lon, 50000);
@@ -160,14 +182,14 @@ function MainApp() {
         } catch {}
       };
 
-      expoGoAndroidTimer = setInterval(checkNearbyIncidentsExpoGo, 20000);
+      expoGoBridgeTimer = setInterval(checkNearbyIncidentsExpoGo, 10000);
       checkNearbyIncidentsExpoGo();
     }
 
     return () => {
       subscription?.remove();
       tapSubscription?.remove();
-      if (expoGoAndroidTimer) clearInterval(expoGoAndroidTimer);
+      if (expoGoBridgeTimer) clearInterval(expoGoBridgeTimer);
       stopContinuousLocationTracking();
       // No se detiene la sirena ni las notificaciones al minimizar la app.
       // La tarea de segundo plano sigue corriendo por su cuenta.
