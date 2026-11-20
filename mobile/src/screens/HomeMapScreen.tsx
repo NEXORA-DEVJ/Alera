@@ -235,10 +235,15 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
 
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   const EVENTS_CACHE_KEY = '@alera_events_cache';
+  const isFirstMountRef = useRef<boolean>(true);
 
-  // Actualizacion automatica al enfocar pantalla
+  // Actualizacion automatica al re-enfocar la pantalla (no en el montaje inicial para evitar doble recarga)
   useFocusEffect(
     useCallback(() => {
+      if (isFirstMountRef.current) {
+        isFirstMountRef.current = false;
+        return;
+      }
       loadRecentEvents(false);
     }, [])
   );

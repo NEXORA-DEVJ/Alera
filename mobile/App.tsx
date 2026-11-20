@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -9,13 +10,15 @@ import { RootErrorBoundary } from './src/components/RootErrorBoundary';
 import {
   registerForPushNotificationsAsync,
   triggerLocalProximityAlert,
+  isIncidentAlerted,
+  markIncidentAsAlerted,
 } from './src/services/notifications';
 import { SirenAlertType } from './src/services/sound';
 import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
 import { registerBackgroundSeismicTask } from './src/services/backgroundTask';
 import { emitCommunityAlert } from './src/services/communityAlertEvents';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { generateUUID } from './src/services/api';
+import { api, generateUUID } from './src/services/api';
 import * as Notifications from 'expo-notifications';
 
 function MainApp() {
@@ -95,9 +98,70 @@ function MainApp() {
       });
     } catch {}
 
+    // 6. Puente de pruebas EXCLUSIVO para Android en Expo Go (SDK 53):
+    // Como Expo Go en Android eliminó el soporte de push remoto en SDK 53,
+    // este puente permite recibir las alertas comunitarias en Android durante pruebas en Expo Go
+    // aunque el usuario esté en la pestaña de Sismos o Perfil.
+    // En iPhone y en el APK de producción este bloque NO corre (usan Push 100% nativo).
+    let expoGoAndroidTimer: ReturnType<typeof setInterval> | null = null;
+    const isExpoGoAndroid =
+      Platform.OS === 'android' &&
+      (Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+       (Constants as any).appOwnership === 'expo');
+
+    if (isExpoGoAndroid) {
+      const checkNearbyIncidentsExpoGo = async () => {
+        try {
+          const [latStr, lonStr, devId] = await Promise.all([
+            AsyncStorage.getItem('@alera_last_lat'),
+            AsyncStorage.getItem('@alera_last_lon'),
+            AsyncStorage.getItem('@alera_device_id'),
+          ]);
+          if (!latStr || !lonStr) return;
+          const lat = parseFloat(latStr);
+          const lon = parseFloat(lonStr);
+          if (isNaN(lat) || isNaN(lon)) return;
+
+          const incidents = await api.getNearbyCommunityIncidents(lat, lon, 50000);
+          if (incidents && incidents.length > 0) {
+            const hazard = incidents.find(
+              (item) =>
+                item.distanceMeters <= 1500 &&
+                item.incident.status !== 'RESOLVED' &&
+                item.incident.status !== 'EXPIRED' &&
+                item.incident.reporterDeviceId !== (devId || '') &&
+                !isIncidentAlerted(item.incident.id)
+            );
+
+            if (hazard) {
+              markIncidentAsAlerted(hazard.incident.id);
+              const dist =
+                hazard.distanceMeters < 1000
+                  ? `${Math.round(hazard.distanceMeters)} m`
+                  : `${(hazard.distanceMeters / 1000).toFixed(1)} km`;
+
+              triggerLocalProximityAlert(
+                `ALERTA COMUNITARIA: Incidente Vecinal`,
+                `Estás a ${dist} del incidente. ${hazard.incident.description || ''}`.trim(),
+                true,
+                'community',
+                `A ${dist} del origen`,
+                true
+              );
+              emitCommunityAlert(hazard.incident);
+            }
+          }
+        } catch {}
+      };
+
+      expoGoAndroidTimer = setInterval(checkNearbyIncidentsExpoGo, 20000);
+      checkNearbyIncidentsExpoGo();
+    }
+
     return () => {
       subscription?.remove();
       tapSubscription?.remove();
+      if (expoGoAndroidTimer) clearInterval(expoGoAndroidTimer);
       stopContinuousLocationTracking();
       // No se detiene la sirena ni las notificaciones al minimizar la app.
       // La tarea de segundo plano sigue corriendo por su cuenta.

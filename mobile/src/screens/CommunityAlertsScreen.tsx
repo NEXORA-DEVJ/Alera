@@ -391,10 +391,11 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   // Carga limpia bajo demanda al enfocar la pantalla (On-Demand / Focus)
+  // Dependencia vacía [] para que solo se ejecute UNA vez por foco y no se recargue sola
   useFocusEffect(
     useCallback(() => {
       acquireLocationAndLoad();
-    }, [deviceId])
+    }, [])
   );
 
   // Suscripción reactiva Event-Driven:
