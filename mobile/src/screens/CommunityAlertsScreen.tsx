@@ -29,12 +29,14 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AleraInteractiveMap, AleraInteractiveMapRef } from '../components/AleraInteractiveMap';
 import { MapErrorBoundary } from '../components/MapErrorBoundary';
+import { subscribeToCommunityAlerts } from '../services/communityAlertEvents';
 import {
   triggerLocalProximityAlert,
   isIncidentAlerted,
@@ -388,23 +390,29 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  // Carga limpia bajo demanda al enfocar la pantalla (On-Demand / Focus)
   useFocusEffect(
     useCallback(() => {
       acquireLocationAndLoad();
-
-      // Polling en pantalla: refresca la lista cada 45 s mientras el usuario
-      // está en esta pantalla. Permite ver nuevos incidentes sin salir y volver.
-      const screenPollTimer = setInterval(() => {
-        if (userLocation) {
-          loadIncidents(userLocation.latitude, userLocation.longitude, true);
-        }
-      }, 45_000);
-
-      return () => {
-        clearInterval(screenPollTimer);
-      };
-    }, [deviceId, userLocation])
+    }, [deviceId])
   );
+
+  // Suscripción reactiva Event-Driven:
+  // Cuando entra un push de incidente comunitario por el backend (FCM/Expo),
+  // se refresca la lista inmediatamente con cero latencia y cero sondeo en bucle.
+  useEffect(() => {
+    const unsubscribe = subscribeToCommunityAlerts(() => {
+      if (userLocation) {
+        loadIncidents(userLocation.latitude, userLocation.longitude, true);
+      } else {
+        acquireLocationAndLoad();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [userLocation]);
 
   const acquireLocationAndLoad = async (): Promise<void> => {
     setLoading(true);
@@ -692,6 +700,14 @@ export const CommunityAlertsScreen: React.FC<Props> = ({ navigation }) => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={acquireLocationAndLoad}
+            tintColor={colors.seismicAccent}
+            colors={[colors.seismicAccent]}
+          />
+        }
       >
         <View style={styles.listHeaderRow}>
           <Text style={styles.listTitle}>REPORTES COMUNITARIOS ACTIVOS</Text>

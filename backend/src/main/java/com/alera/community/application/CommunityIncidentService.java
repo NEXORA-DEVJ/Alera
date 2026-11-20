@@ -101,17 +101,29 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
 
     private void notifyNearbyDevices(CommunityIncident incident) {
         try {
-            double radiusKm = incident.getRadiusMeters() / 1000.0;
-            List<DeviceService.NearbyActiveDevice> nearby =
-                    deviceService.findActiveDevicesNearbyWithDistance(incident.getCoordinates(), radiusKm);
+            // Regla de negocio estricta ALERA:
+            // Solo los dispositivos a un máximo de 1500 metros (1.5 km) reciben la notificación push de alerta comunitaria.
+            final double maxProximityRadiusKm = 1.5;
+            double searchRadiusKm = (incident.getRadiusMeters() > 0)
+                    ? Math.min(maxProximityRadiusKm, incident.getRadiusMeters() / 1000.0)
+                    : maxProximityRadiusKm;
 
-            log.info("Despachando alertas comunitarias para incidente {} (radio {} km). Dispositivos activos en zona: {}",
-                    incident.getId(), radiusKm, nearby.size());
+            List<DeviceService.NearbyActiveDevice> nearby =
+                    deviceService.findActiveDevicesNearbyWithDistance(incident.getCoordinates(), searchRadiusKm);
+
+            log.info("Despachando alertas comunitarias para incidente {} (radio filtrado: {} km). Dispositivos activos en zona: {}",
+                    incident.getId(), searchRadiusKm, nearby.size());
 
             for (DeviceService.NearbyActiveDevice target : nearby) {
+                // Excluir al dispositivo creador del reporte
                 if (incident.getReporterDeviceId() != null &&
                         incident.getReporterDeviceId().equals(target.device().getId())) {
                     log.info("Omitiendo notificación push para el dispositivo reportero creador: {}", incident.getReporterDeviceId());
+                    continue;
+                }
+
+                // Doble validación estricta de distancia (<= 1.5 km)
+                if (target.distanceKm() > maxProximityRadiusKm) {
                     continue;
                 }
 
@@ -124,7 +136,7 @@ public class CommunityIncidentService implements CreateCommunityIncidentUseCase,
                 };
 
                 String title = String.format("ALERTA COMUNITARIA: %s", typeName);
-                String body = String.format("Estás dentro del radio de afectación (%.1f km). %s",
+                String body = String.format("Estás a %.1f km del incidente. %s",
                         target.distanceKm(),
                         (incident.getDescription() != null && !incident.getDescription().isBlank())
                                 ? incident.getDescription().trim()

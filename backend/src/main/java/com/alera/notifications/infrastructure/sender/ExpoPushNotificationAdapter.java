@@ -47,7 +47,10 @@ public class ExpoPushNotificationAdapter implements PushNotificationSenderPort {
                 payload.put("body", message.body());
                 payload.put("sound", "default");
                 payload.put("priority", "high");
-                payload.put("channelId", "alera_emergency_channel");
+                String channelId = (message.data() != null && "community".equalsIgnoreCase(message.data().get("type")))
+                        ? "alera_community_channel"
+                        : "alera_emergency_channel";
+                payload.put("channelId", channelId);
                 payload.put("_displayInForeground", true);
                 payload.put("data", message.data());
 
@@ -58,7 +61,7 @@ public class ExpoPushNotificationAdapter implements PushNotificationSenderPort {
                         .retrieve()
                         .toBodilessEntity();
 
-                log.info("Push enviado via Expo Push Service a: {} [canal: alera_emergency_channel]", token);
+                log.info("Push enviado via Expo Push Service a: {} [canal: {}]", token, channelId);
                 return NotificationResult.ok(token, "expo_" + UUID.randomUUID().toString().substring(0, 8));
             } catch (Exception ex) {
                 log.error("Fallo al enviar push via Expo: {}", ex.getMessage());

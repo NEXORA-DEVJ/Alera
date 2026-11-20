@@ -13,10 +13,7 @@ import {
 import { SirenAlertType } from './src/services/sound';
 import { startContinuousLocationTracking, stopContinuousLocationTracking } from './src/services/location';
 import { registerBackgroundSeismicTask } from './src/services/backgroundTask';
-import {
-  startCommunityAlertMonitoring,
-  stopCommunityAlertMonitoring,
-} from './src/services/communityAlertMonitor';
+import { emitCommunityAlert } from './src/services/communityAlertEvents';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateUUID } from './src/services/api';
 import * as Notifications from 'expo-notifications';
@@ -45,18 +42,8 @@ function MainApp() {
       console.warn('[ALERA BG] No se pudo registrar tarea de fondo:', err);
     });
 
-    // 4. Iniciar monitor de alertas comunitarias en primer plano (funciona en CUALQUIER pantalla)
-    // Polling cada 60 s: detecta incidentes a ≤1500 m y dispara notificacion local
-    AsyncStorage.getItem('@alera_device_id')
-      .then((id) => {
-        const devId = id && id.length === 36 ? id : generateUUID();
-        startCommunityAlertMonitoring(devId);
-      })
-      .catch(() => {
-        startCommunityAlertMonitoring('');
-      });
-
-    // 5. Escuchador reactivo de notificaciones push (mientras la app esta abierta)
+    // 4. Escuchador reactivo de notificaciones push (Event-Driven / Cero Polling)
+    // Despacho instantaneo por push de Expo / FCM: funciona en cualquier pantalla o en segundo plano
     let subscription: Notifications.Subscription | null = null;
     try {
       subscription = Notifications.addNotificationReceivedListener((notification) => {
@@ -69,19 +56,26 @@ function MainApp() {
             return;
           }
 
-          const rawTitle = content.title || 'ALERTA SISMICA ALERA';
+          const rawTitle = content.title || 'ALERTA ALERA';
           const body = content.body || '';
           const titleUpper = rawTitle.toUpperCase();
 
-          const type: SirenAlertType =
-            (titleUpper.includes('SISMO') || titleUpper.includes('TERREMOTO') || data.type === 'seismic')
-              ? 'seismic'
-              : 'community';
+          const isCommunity = data.type === 'community' || titleUpper.includes('COMUNITARIA');
+          const type: SirenAlertType = isCommunity ? 'community' : 'seismic';
 
-          const subtitle = data.magnitude ? `Magnitud: M ${data.magnitude}` : undefined;
+          const subtitle = data.distanceKm
+            ? `A ${data.distanceKm} km del incidente`
+            : data.magnitude
+            ? `Magnitud: M ${data.magnitude}`
+            : undefined;
 
           // Despachar banner visual + sirena (app abierta: primer plano)
           triggerLocalProximityAlert(rawTitle, body, true, type, subtitle, false);
+
+          // Si es alerta comunitaria, propagar el evento reactivamente al Observer bus
+          if (isCommunity) {
+            emitCommunityAlert(data);
+          }
         } catch (listenerErr) {
           console.warn('[ALERA] Error procesando notificacion push entrante:', listenerErr);
         }
@@ -90,7 +84,7 @@ function MainApp() {
       console.warn('[ALERA] No se pudo inicializar listener de notificaciones:', subErr);
     }
 
-    // 6. Escuchador de toque en notificacion (usuario abre la app desde la bandeja)
+    // 5. Escuchador de toque en notificacion (usuario abre la app desde la bandeja)
     let tapSubscription: Notifications.Subscription | null = null;
     try {
       tapSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -105,7 +99,6 @@ function MainApp() {
       subscription?.remove();
       tapSubscription?.remove();
       stopContinuousLocationTracking();
-      stopCommunityAlertMonitoring();
       // No se detiene la sirena ni las notificaciones al minimizar la app.
       // La tarea de segundo plano sigue corriendo por su cuenta.
     };

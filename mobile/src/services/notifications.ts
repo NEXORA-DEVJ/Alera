@@ -14,13 +14,10 @@ const DEVICE_STORAGE_KEY = '@alera_device_id';
 try {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
-      // Las notificaciones de segundo plano (backgroundTask) llevan isBackgroundAlert=true.
-      // Para esas, el sistema operativo ya reproduce el sonido del canal de Android.
-      // Para las disparadas en primer plano, el audio lo gestiona playEmergencySiren().
-      const isBackground = notification.request.content.data?.isBackgroundAlert === true;
+      // Las notificaciones deben sonar tanto en segundo plano como en primer plano.
       return {
         shouldShowAlert: true,
-        shouldPlaySound: isBackground, // Sonido del SO solo para notificaciones de fondo
+        shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
