@@ -634,6 +634,7 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.sectionHeaderContainer}>
           {searchedCity ? (
             <View style={styles.searchActiveHeader}>
+              {/* Fila única: título ciudad | quitar | filtros | lista — sin solapamiento */}
               <View style={styles.searchActiveTitleRow}>
                 <View style={styles.searchCityBadgeRow}>
                   <MapPin size={13} color={colors.seismicAccent} strokeWidth={2.4} />
@@ -641,19 +642,18 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                     CERCA DE {searchedCity.name.toUpperCase()}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.clearSearchBadge}
-                  onPress={handleClearSearch}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <X size={11} color={colors.seismicAccent} strokeWidth={2.5} />
-                  <Text style={styles.clearSearchBadgeText}>Quitar filtro</Text>
-                </TouchableOpacity>
-              </View>
 
-              <View style={styles.searchActiveFiltersRow}>
-                <View style={styles.timeFilterGroup}>
+                <View style={styles.searchActiveRightControls}>
+                  <TouchableOpacity
+                    style={styles.clearSearchBadge}
+                    onPress={handleClearSearch}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={11} color={colors.seismicAccent} strokeWidth={2.5} />
+                    <Text style={styles.clearSearchBadgeText}>Quitar</Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     style={[
                       styles.timeFilterChip,
@@ -689,22 +689,22 @@ export const HomeMapScreen: React.FC<Props> = ({ navigation }) => {
                     <Text
                       style={[
                         styles.timeFilterText,
-                        timeFilter === 'ALL' && styles.timeFilterChipActive,
+                        timeFilter === 'ALL' && styles.timeFilterTextActive,
                       ]}
                     >
-                      Todos ({events.length})
+                      Todos
                     </Text>
                   </TouchableOpacity>
-                </View>
 
-                <TouchableOpacity
-                  style={styles.historyLinkButtonLarge}
-                  onPress={() => navigation.navigate('SeismicList')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.historyLinkTextLarge}>Lista</Text>
-                  <ChevronRight size={17} color={colors.seismicAccent} strokeWidth={2.4} />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.historyLinkButtonLarge}
+                    onPress={() => navigation.navigate('SeismicList')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.historyLinkTextLarge}>Lista</Text>
+                    <ChevronRight size={15} color={colors.seismicAccent} strokeWidth={2.4} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ) : (
@@ -1008,7 +1008,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       letterSpacing: 0.6,
     },
     searchActiveHeader: {
-      gap: 8,
+      gap: 6,
     },
     searchActiveTitleRow: {
       flexDirection: 'row',
@@ -1021,6 +1021,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       gap: 5,
       flex: 1,
       marginRight: 8,
+      minWidth: 0,
+    },
+    // Controles agrupados a la derecha en fila única (quitar + filtros + lista)
+    searchActiveRightControls: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      flexShrink: 0,
     },
     searchActiveFiltersRow: {
       flexDirection: 'row',

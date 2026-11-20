@@ -79,10 +79,17 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
   ) => {
     const webViewRef = useRef<any>(null);
     const isMapReadyRef = useRef<boolean>(false);
+    // Región pendiente para aplicar cuando el mapa termine de cargar
+    const pendingRegionRef = useRef<MapRegion | null>(null);
 
     // Método imperativo para volar suavemente a una región
+    // Si el mapa aún no está listo, guarda la región y la aplica al cargar
     useImperativeHandle(ref, () => ({
       animateToRegion: (targetRegion: MapRegion) => {
+        if (!isMapReadyRef.current) {
+          pendingRegionRef.current = targetRegion;
+          return;
+        }
         const zoom = deltaToZoom(targetRegion.latitudeDelta);
         const js = `if (window.flyToRegion) { window.flyToRegion(${targetRegion.latitude}, ${targetRegion.longitude}, ${zoom}); } true;`;
         webViewRef.current?.injectJavaScript(js);
@@ -91,11 +98,15 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
 
     // Sincronización reactiva cuando cambia la prop region
     useEffect(() => {
-      if (region && region.latitude && region.longitude) {
-        const zoom = deltaToZoom(region.latitudeDelta);
-        const js = `if (window.flyToRegion) { window.flyToRegion(${region.latitude}, ${region.longitude}, ${zoom}); } true;`;
-        webViewRef.current?.injectJavaScript(js);
+      if (!region || !region.latitude || !region.longitude) return;
+      if (!isMapReadyRef.current) {
+        // Guardar para cuando el mapa esté listo
+        pendingRegionRef.current = region;
+        return;
       }
+      const zoom = deltaToZoom(region.latitudeDelta);
+      const js = `if (window.flyToRegion) { window.flyToRegion(${region.latitude}, ${region.longitude}, ${zoom}); } true;`;
+      webViewRef.current?.injectJavaScript(js);
     }, [region?.latitude, region?.longitude, region?.latitudeDelta]);
 
     // Serialización limpia de marcadores para inyección sin recargar HTML
@@ -388,6 +399,15 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
             true;
           `;
           webViewRef.current?.injectJavaScript(syncJs);
+          // Aplicar región pendiente si se solicitó antes de que el mapa estuviera listo
+          const pending = pendingRegionRef.current;
+          if (pending) {
+            pendingRegionRef.current = null;
+            const zoom = deltaToZoom(pending.latitudeDelta);
+            const flyJs = `if (window.flyToRegion) { window.flyToRegion(${pending.latitude}, ${pending.longitude}, ${zoom}); } true;`;
+            // Pequeño delay para que Leaflet termine de inicializar sus capas
+            setTimeout(() => { webViewRef.current?.injectJavaScript(flyJs); }, 350);
+          }
         } else if (data.type === 'MARKER_PRESS') {
           if (onMarkerPress) {
             onMarkerPress(data.id);
