@@ -166,6 +166,17 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
       }
     }, [userCoord?.latitude, userCoord?.longitude, showUserLocation]);
 
+    // Inyección en vivo de pin para seleccionar ubicación en reportes
+    useEffect(() => {
+      if (isMapReadyRef.current) {
+        const pinData = draggablePin && draggablePin.latitude && draggablePin.longitude
+          ? JSON.stringify({ lat: draggablePin.latitude, lng: draggablePin.longitude })
+          : 'null';
+        const js = `if (window.setPin) { window.setPin(${pinData}); } true;`;
+        webViewRef.current?.injectJavaScript(js);
+      }
+    }, [draggablePin?.latitude, draggablePin?.longitude]);
+
     // HTML autosuficiente memoizado únicamente por tema (se carga UNA sola vez)
     const leafletHtml = useMemo(() => {
       const initialLat = initialRegion.latitude || 4.5709;
@@ -356,6 +367,28 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
           }
         };
 
+        window.setPin = function(coord) {
+          if (!window.map || !window.pinLayer) return;
+          window.pinLayer.clearLayers();
+          if (coord && coord.lat && coord.lng) {
+            var pinSvg = '<svg class="draggable-pin" viewBox="0 0 24 24" fill="#EF4444" stroke="#FFFFFF" stroke-width="1.8" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="3.2" fill="#FFFFFF"/></svg>';
+            var pinIcon = L.divIcon({
+              className: 'custom-draggable-pin-icon',
+              html: pinSvg,
+              iconSize: [0, 0]
+            });
+            var pinMarker = L.marker([coord.lat, coord.lng], {
+              icon: pinIcon,
+              draggable: true
+            }).addTo(window.pinLayer);
+
+            pinMarker.on('dragend', function(e) {
+              var pos = e.target.getLatLng();
+              sendToNative({ type: 'PIN_CHANGE', latitude: pos.lat, longitude: pos.lng });
+            });
+          }
+        };
+
         window.flyToRegion = function(lat, lng, zoom) {
           if (!window.map) return;
           window.map.flyTo([lat, lng], zoom, { duration: 0.9 });
@@ -396,6 +429,7 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
             if (window.setMarkers) window.setMarkers(${serializedMarkers});
             if (window.setCircles) window.setCircles(${serializedCircles});
             if (window.setUserCoord) window.setUserCoord(${userCoord ? JSON.stringify({ lat: userCoord.latitude, lng: userCoord.longitude }) : 'null'});
+            if (window.setPin) window.setPin(${draggablePin ? JSON.stringify({ lat: draggablePin.latitude, lng: draggablePin.longitude }) : 'null'});
             true;
           `;
           webViewRef.current?.injectJavaScript(syncJs);
@@ -439,6 +473,9 @@ export const AleraInteractiveMap = forwardRef<AleraInteractiveMapRef, AleraInter
           domStorageEnabled={true}
           mixedContentMode="always"
           allowsInlineMediaPlayback={true}
+          androidHardwareAccelerationDisabled={false}
+          androidLayerType="hardware"
+          cacheEnabled={true}
           onMessage={handleWebViewMessage}
           onError={(e: any) => console.warn('[AleraInteractiveMap WebView Error]:', e.nativeEvent)}
         />
